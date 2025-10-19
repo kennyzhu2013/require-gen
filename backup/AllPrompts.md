@@ -26,3 +26,36 @@
 
 
 1，golanganalyse.md首先参考golang分析用golang实现其中的配置管理模块，满足需求描述specify.md中对配置实体和配置管理功能要求，包括配置实体的定义、配置文件的解析、配置的读取和写入等。
+
+
+2，__init__.py 详细分析speckit的python源码，结合之前分析结果 pythonanalyse.md 列出里面 Infrastructure Layer 详细功能，尽量细致并把结果保存到requiregenDocs/ infrastructure Layer 目录下文件名2_infrastructure_Layer .md
+3，以上分析的Infrastructure Layer对应golang实现框架里的哪些代码，依赖哪些模块或函数，尽量细致并把结果保存到requiregenDocs/ infrastructure Layer 目录下文件名infrastructure_Layer _detail.md
+4，Infrastructure Layer对应的主要代码文件和核心模块之间有没依赖关系，按依赖关系考虑实现顺序是怎样的
+
+5，根据之前分析结果和golang框架设计分析，校验并完善实现Infrastructure Layer中system.go的功能
+6，参考Infrastructure Layer 详细分析和详细实现对比分析，继续校验并完善实现Infrastructure Layer中auth.go的功能
+
+参考Infrastructure Layer 详细分析 2_infrastructure_Layer.md 和 infrastructure_Layer_detail.md 详细实现对比分析，继续校验并完善实现Infrastructure Layer中auth.go的功能
+
+
+7，将 system.go 实现的Infrastructure Layer的File System块功能和 __init__.py python文件对应的File System进行详细分析校验，找出对应关系
+
+8，将golang实现的Infrastructure Layer的功能 2_infrastructure_Layer.md 和 __init__.py 对应的Infrastructure Layer进行详细分析校验，找出两则代码实现对应关联关系，分析结果保存到infrastructure子目录下文件名infrastructure_Layer_detail.md
+
+9，__init__.py python版本里Infrastructure Layer中的File System具备的zip文件处理功能有哪些
+
+10，golang版本的Infrastructure Layer中的File System要实现上一步分析的python版本的ZIP文件处理核心功能，请分析如何实现和python完全一样功能，并将分析结果保存在infrastructure目录下文件名为ziputil.md
+
+11，根据分析文档 ziputil.md 中的Go语言实现方案，逐步分功能生成对应golang代码保存在infrastructure目录下文件名ziputil.go
+
+12，之前分析的 infrastructure_Layer_detail.md 中Git 操作模块功能Go和Python实现对比分析结果，分析下 git.go 是如何实现和python完全一样功能，并校验下有没遗漏
+
+
+13，__init__.py 详细分析speckit的python源码，结合之前分析结果 pythonanalyse.md 列出里面UI Components Layer详细功能，尽量细致并把结果保存到requiregenDocs/config目录下文件名1_config.md
+
+14，以上分析的UI Components Layer详细功能，对应golang实现框架里的哪些代码，依赖哪些模块或函数，尽量分析细致并把结果保存到requiregenDocs/UI目录下文件名ui_detail.md
+
+
+执行：
+config.go 将此文件中的AgentConfig值和 __init__.py 中的AGENT_CONFIG对比，将golang实现中设置的内容和python实现的AgentConfig值一样
+

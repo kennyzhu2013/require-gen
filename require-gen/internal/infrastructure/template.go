@@ -179,7 +179,7 @@ func (tp *TemplateProvider) downloadAsset(asset *types.Asset, downloadPath strin
 
 	// 设置进度回调
 	if opts.ShowProgress {
-		req.SetOutput(file)
+		// 不设置输出，让resty处理默认输出
 	}
 
 	// 下载文件
@@ -228,11 +228,45 @@ func (tp *TemplateProvider) extractZip(zipPath, targetDir string, opts types.Dow
 		ui.ShowInfo(fmt.Sprintf("Extracting %s", filepath.Base(zipPath)))
 	}
 
-	// 这里应该实现ZIP提取逻辑
-	// 由于Go标准库的archive/zip包比较复杂，这里提供一个简化版本
+	// 创建系统操作实例
+	sysOps := NewSystemOperations()
 	
-	// 实际实现中应该使用archive/zip包
-	// 或者调用系统的unzip命令
+	// 创建ZIP处理器
+	zipProcessor := NewZipProcessor(sysOps)
+	
+	// 配置提取选项
+	extractOpts := &ExtractOptions{
+		OverwriteExisting:    true,
+		PreservePermissions:  true,
+		FlattenStructure:     false,
+		MaxFileSize:          100 * 1024 * 1024, // 100MB
+		AllowedExtensions:    []string{}, // 允许所有扩展名
+		SkipHidden:           false,
+		Verbose:              opts.Verbose,
+	}
+	
+	// 执行ZIP提取
+	if opts.Verbose {
+		// 使用带进度的提取
+		progressCallback := func(current, total int64) {
+			if total > 0 {
+				percentage := float64(current) / float64(total) * 100
+				ui.ShowInfo(fmt.Sprintf("Extracting... %.1f%% (%d/%d bytes)", 
+					percentage, current, total))
+			}
+		}
+		
+		err := zipProcessor.ExtractWithProgress(zipPath, targetDir, extractOpts, progressCallback)
+		if err != nil {
+			return fmt.Errorf("failed to extract ZIP file: %w", err)
+		}
+	} else {
+		// 使用普通提取
+		err := zipProcessor.ExtractZip(zipPath, targetDir, extractOpts)
+		if err != nil {
+			return fmt.Errorf("failed to extract ZIP file: %w", err)
+		}
+	}
 	
 	if opts.Verbose {
 		ui.ShowSuccess("Extraction completed")
