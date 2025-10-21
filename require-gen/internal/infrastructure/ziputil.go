@@ -32,6 +32,30 @@ type ExtractOptions struct {
 	AllowedExtensions   []string // 允许的文件扩展名
 	Verbose             bool     // 详细输出模式
 	TempDir             string   // 临时目录路径
+	SmartMerge          bool     // 智能合并模式（处理文件冲突）
+	ConflictResolution  string   // 冲突解决策略：skip, overwrite, rename, prompt
+	OnProgress          func(current, total int64, filename string) // 进度回调函数
+	OnError             func(filename string, err error) bool       // 错误处理回调，返回true继续，false停止
+	OnConflict          func(conflictInfo *FileConflictInfo) ConflictAction // 冲突处理回调
+}
+
+// ConflictAction 文件冲突处理动作
+type ConflictAction int
+
+const (
+	ConflictSkip ConflictAction = iota
+	ConflictOverwrite
+	ConflictRename
+	ConflictPrompt
+)
+
+// FileConflictInfo 文件冲突信息
+type FileConflictInfo struct {
+	SourcePath string
+	TargetPath string
+	Exists     bool
+	Size       int64
+	ModTime    int64
 }
 
 // ZipProcessorImpl ZIP处理器实现
@@ -348,25 +372,76 @@ func (zp *ZipProcessorImpl) ExtractWithProgress(zipPath, targetDir string, opts 
 	}
 	defer reader.Close()
 
-	// 计算总文件数
+	// 计算总文件数和总大小
 	totalFiles := int64(len(reader.File))
+	var totalSize int64
+	for _, file := range reader.File {
+		totalSize += int64(file.UncompressedSize64)
+	}
+
 	var currentFile int64 = 0
+	var processedSize int64 = 0
+	var skippedFiles []string
+	var errorFiles []string
 
 	// 提取所有文件并报告进度
 	for _, file := range reader.File {
+		filename := file.Name
+		
+		// 调用详细进度回调
+		if opts.OnProgress != nil {
+			opts.OnProgress(currentFile, totalFiles, filename)
+		}
+		
+		// 提取单个文件
 		if err := zp.extractSingleFile(file, targetDir, opts); err != nil {
-			return &ZipError{
-				Operation: "extract_progress",
-				Path:      zipPath,
-				Cause:     fmt.Errorf("failed to extract file '%s': %w", file.Name, err),
+			// 处理错误
+			if opts.OnError != nil {
+				if !opts.OnError(filename, err) {
+					// 用户选择停止
+					return &ZipError{
+						Operation: "extract_progress",
+						Path:      zipPath,
+						Cause:     fmt.Errorf("extraction stopped by user after error in file '%s': %w", filename, err),
+					}
+				}
+				// 记录错误但继续
+				errorFiles = append(errorFiles, filename)
+			} else {
+				// 没有错误处理回调，直接返回错误
+				return &ZipError{
+					Operation: "extract_progress",
+					Path:      zipPath,
+					Cause:     fmt.Errorf("failed to extract file '%s': %w", filename, err),
+				}
 			}
 		}
 
 		// 更新进度
 		currentFile++
+		processedSize += int64(file.UncompressedSize64)
+		
+		// 调用原始进度回调（保持向后兼容）
 		if progressCallback != nil {
 			progressCallback(currentFile, totalFiles)
 		}
+		
+		// 详细模式输出
+		if opts.Verbose {
+			fmt.Printf("Extracted: %s (%d/%d)\n", filename, currentFile, totalFiles)
+		}
+	}
+
+	// 输出摘要信息
+	if opts.Verbose {
+		fmt.Printf("Extraction completed: %d files processed", currentFile)
+		if len(skippedFiles) > 0 {
+			fmt.Printf(", %d files skipped", len(skippedFiles))
+		}
+		if len(errorFiles) > 0 {
+			fmt.Printf(", %d files had errors", len(errorFiles))
+		}
+		fmt.Println()
 	}
 
 	return nil
@@ -390,7 +465,7 @@ func (zp *ZipProcessorImpl) extractSingleFile(file *zip.File, targetDir string, 
 	}
 
 	// 检查文件大小限制
-	if opts.MaxFileSize > 0 && file.UncompressedSize64 > uint64(opts.MaxFileSize) {
+	if opts.MaxFileSize > 0 && int64(file.UncompressedSize64) > opts.MaxFileSize {
 		return fmt.Errorf("file size (%d bytes) exceeds limit (%d bytes)",
 			file.UncompressedSize64, opts.MaxFileSize)
 	}
@@ -410,11 +485,37 @@ func (zp *ZipProcessorImpl) extractSingleFile(file *zip.File, targetDir string, 
 	}
 
 	// 检查文件是否已存在
-	if zp.sysOps.FileExists(targetPath) && !opts.OverwriteExisting {
-		if opts.Verbose {
-			fmt.Printf("Skipping existing file: %s\n", targetPath)
+	if zp.sysOps.FileExists(targetPath) {
+		conflictInfo := &FileConflictInfo{
+			SourcePath: file.Name,
+			TargetPath: targetPath,
+			Exists:     true,
+			Size:       int64(file.UncompressedSize64),
+			ModTime:    file.Modified.Unix(),
 		}
-		return nil
+
+		// 处理文件冲突
+		finalPath, action, err := zp.handleFileConflict(conflictInfo, opts)
+		if err != nil {
+			return fmt.Errorf("failed to handle file conflict: %w", err)
+		}
+
+		switch action {
+		case ConflictSkip:
+			if opts.Verbose {
+				fmt.Printf("Skipping existing file: %s\n", targetPath)
+			}
+			return nil
+		case ConflictRename:
+			targetPath = finalPath
+			if opts.Verbose {
+				fmt.Printf("Renaming conflicted file to: %s\n", targetPath)
+			}
+		case ConflictOverwrite:
+			if opts.Verbose {
+				fmt.Printf("Overwriting existing file: %s\n", targetPath)
+			}
+		}
 	}
 
 	// 提取文件内容
@@ -446,6 +547,83 @@ func (zp *ZipProcessorImpl) calculateTargetPath(entryPath, targetDir string, opt
 	}
 	// 保持原有目录结构
 	return filepath.Join(targetDir, entryPath)
+}
+
+// handleFileConflict 处理文件冲突
+func (zp *ZipProcessorImpl) handleFileConflict(conflictInfo *FileConflictInfo, opts *ExtractOptions) (string, ConflictAction, error) {
+	if !opts.SmartMerge {
+		// 如果没有启用智能合并，使用传统逻辑
+		if opts.OverwriteExisting {
+			return conflictInfo.TargetPath, ConflictOverwrite, nil
+		}
+		return "", ConflictSkip, nil
+	}
+
+	// 优先使用回调函数处理冲突
+	if opts.OnConflict != nil {
+		action := opts.OnConflict(conflictInfo)
+		switch action {
+		case ConflictSkip:
+			return "", ConflictSkip, nil
+		case ConflictOverwrite:
+			return conflictInfo.TargetPath, ConflictOverwrite, nil
+		case ConflictRename:
+			newPath := zp.generateUniqueFileName(conflictInfo.TargetPath)
+			return newPath, ConflictRename, nil
+		default:
+			return conflictInfo.TargetPath, ConflictOverwrite, nil
+		}
+	}
+
+	// 根据配置的冲突解决策略处理
+	switch opts.ConflictResolution {
+	case "skip":
+		return "", ConflictSkip, nil
+	case "overwrite":
+		return conflictInfo.TargetPath, ConflictOverwrite, nil
+	case "rename":
+		newPath := zp.generateUniqueFileName(conflictInfo.TargetPath)
+		return newPath, ConflictRename, nil
+	case "prompt":
+		// 这里可以实现交互式提示，暂时返回默认行为
+		if opts.Verbose {
+			fmt.Printf("File conflict: %s already exists\n", conflictInfo.TargetPath)
+		}
+		return conflictInfo.TargetPath, ConflictOverwrite, nil
+	default:
+		// 默认策略：如果源文件更新则覆盖，否则跳过
+		if zp.isSourceNewer(conflictInfo) {
+			return conflictInfo.TargetPath, ConflictOverwrite, nil
+		}
+		return "", ConflictSkip, nil
+	}
+}
+
+// generateUniqueFileName 生成唯一文件名
+func (zp *ZipProcessorImpl) generateUniqueFileName(originalPath string) string {
+	dir := filepath.Dir(originalPath)
+	name := filepath.Base(originalPath)
+	ext := filepath.Ext(name)
+	nameWithoutExt := strings.TrimSuffix(name, ext)
+
+	counter := 1
+	for {
+		newName := fmt.Sprintf("%s_%d%s", nameWithoutExt, counter, ext)
+		newPath := filepath.Join(dir, newName)
+		if !zp.sysOps.FileExists(newPath) {
+			return newPath
+		}
+		counter++
+	}
+}
+
+// isSourceNewer 检查源文件是否比目标文件更新
+func (zp *ZipProcessorImpl) isSourceNewer(conflictInfo *FileConflictInfo) bool {
+	targetModTime, err := zp.sysOps.GetFileModTime(conflictInfo.TargetPath)
+	if err != nil {
+		return true // 如果无法获取目标文件时间，默认认为源文件更新
+	}
+	return conflictInfo.ModTime > targetModTime
 }
 
 // extractFileContentWithProgress 带进度跟踪的文件内容提取

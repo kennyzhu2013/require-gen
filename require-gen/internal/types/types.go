@@ -5,6 +5,145 @@ import (
 	"time"
 )
 
+// TLSConfig 定义SSL/TLS安全配置
+type TLSConfig struct {
+	InsecureSkipVerify bool   `json:"insecure_skip_verify"` // 是否跳过证书验证
+	CertFile          string `json:"cert_file"`            // 客户端证书文件路径
+	KeyFile           string `json:"key_file"`             // 客户端私钥文件路径
+	CAFile            string `json:"ca_file"`              // CA证书文件路径
+	ServerName        string `json:"server_name"`          // 服务器名称验证
+}
+
+// NetworkConfig 定义网络通信配置
+type NetworkConfig struct {
+	TLS           *TLSConfig    `json:"tls"`             // TLS配置
+	ProxyURL      string        `json:"proxy_url"`       // 代理服务器URL
+	Timeout       time.Duration `json:"timeout"`         // 请求超时时间
+	RetryCount    int           `json:"retry_count"`     // 重试次数
+	RetryWaitTime time.Duration `json:"retry_wait_time"` // 重试等待时间
+}
+
+// HTTPClientConfig 定义HTTP客户端配置
+type HTTPClientConfig struct {
+	Timeout           time.Duration     `json:"timeout"`             // 请求超时
+	RetryCount        int               `json:"retry_count"`         // 重试次数
+	RetryWaitTime     time.Duration     `json:"retry_wait_time"`     // 重试等待时间
+	MaxRetryWaitTime  time.Duration     `json:"max_retry_wait_time"` // 最大重试等待时间
+	FollowRedirects   bool              `json:"follow_redirects"`    // 是否跟随重定向
+	MaxRedirects      int               `json:"max_redirects"`       // 最大重定向次数
+	UserAgent         string            `json:"user_agent"`          // User-Agent
+	Headers           map[string]string `json:"headers"`             // 自定义头部
+	Cookies           map[string]string `json:"cookies"`             // Cookies
+	KeepAlive         bool              `json:"keep_alive"`          // 是否保持连接
+	MaxIdleConns      int               `json:"max_idle_conns"`      // 最大空闲连接数
+	MaxConnsPerHost   int               `json:"max_conns_per_host"`  // 每个主机最大连接数
+	IdleConnTimeout   time.Duration     `json:"idle_conn_timeout"`   // 空闲连接超时
+}
+
+// ProgressInfo 定义下载进度信息
+type ProgressInfo struct {
+	Downloaded int64         `json:"downloaded"` // 已下载字节数
+	Total      int64         `json:"total"`      // 总字节数
+	Percentage float64       `json:"percentage"` // 下载百分比
+	Speed      float64       `json:"speed"`      // 下载速度 (bytes/sec)
+	ETA        time.Duration `json:"eta"`        // 预计剩余时间
+	StartTime  time.Time     `json:"start_time"` // 开始时间
+	LastUpdate time.Time     `json:"last_update"` // 最后更新时间
+}
+
+// ProgressDisplay 定义进度显示接口
+type ProgressDisplay interface {
+	Start(total int64)
+	Update(info *ProgressInfo)
+	Finish()
+	SetMessage(message string)
+}
+
+// NetworkErrorType 定义网络错误类型
+type NetworkErrorType int
+
+const (
+	NetworkErrorTypeTimeout NetworkErrorType = iota
+	NetworkErrorTypeConnection
+	NetworkErrorTypeAuthentication
+	NetworkErrorTypeNotFound
+	NetworkErrorTypeServerError
+	NetworkErrorTypeSSL
+	NetworkErrorTypeProxy
+	NetworkErrorTypeHTTPClient
+	NetworkErrorTypeTemporary
+	NetworkErrorTypeCircuitOpen
+	NetworkErrorTypeRateLimited
+	NetworkErrorTypeUnknown
+	NetworkErrorConnectionRefused
+	NetworkErrorDNSResolution
+	NetworkErrorSSLHandshake
+	NetworkErrorProxyError
+	NetworkErrorTimeout
+	NetworkErrorTemporary
+	NetworkErrorCertificate
+	NetworkErrorAuthentication
+	NetworkErrorPermission
+	NetworkErrorCircuitOpen
+	NetworkErrorUnknown
+	NetworkErrorHTTPServer
+)
+
+// NetworkError 定义网络错误
+type NetworkError struct {
+	Type          NetworkErrorType `json:"type"`
+	Message       string           `json:"message"`
+	Cause         error            `json:"-"`
+	URL           string           `json:"url"`
+	Status        int              `json:"status"`
+	Host          string           `json:"host,omitempty"`
+	Timestamp     time.Time        `json:"timestamp"`
+	Retryable     bool             `json:"retryable"`
+	RetryStrategy interface{}      `json:"retry_strategy,omitempty"`
+	StatusCode    int              `json:"status_code,omitempty"`
+	Details       map[string]interface{} `json:"details,omitempty"`
+}
+
+func (e *NetworkError) Error() string {
+	return e.Message
+}
+
+func (e *NetworkError) Unwrap() error {
+	return e.Cause
+}
+
+// IsRetryable 判断错误是否可重试
+func (e *NetworkError) IsRetryable() bool {
+	switch e.Type {
+	case NetworkErrorTypeTimeout, NetworkErrorTypeConnection, NetworkErrorTypeServerError:
+		return true
+	default:
+		return false
+	}
+}
+
+// String 返回错误类型的字符串表示
+func (t NetworkErrorType) String() string {
+	switch t {
+	case NetworkErrorTypeTimeout:
+		return "TIMEOUT"
+	case NetworkErrorTypeConnection:
+		return "CONNECTION"
+	case NetworkErrorTypeAuthentication:
+		return "AUTHENTICATION"
+	case NetworkErrorTypeNotFound:
+		return "NOT_FOUND"
+	case NetworkErrorTypeServerError:
+		return "SERVER_ERROR"
+	case NetworkErrorTypeSSL:
+		return "SSL"
+	case NetworkErrorTypeProxy:
+		return "PROXY"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 // AgentInfo 定义AI助手的配置信息
 //
 // AgentInfo 结构体封装了AI助手的完整配置信息，用于管理不同AI平台
@@ -93,14 +232,24 @@ type InitOptions struct {
 	Debug        bool
 }
 
-// DownloadOptions 定义模板下载选项
+// DownloadOptions 下载选项配置
 type DownloadOptions struct {
-	AIAssistant  string
-	DownloadDir  string
-	ScriptType   string
-	Verbose      bool
-	ShowProgress bool
-	GitHubToken  string
+	AIAssistant     string                 `json:"ai_assistant"`     // AI助手类型
+	DownloadDir     string                 `json:"download_dir"`     // 下载目录
+	ScriptType      string                 `json:"script_type"`      // 脚本类型
+	Verbose         bool                   `json:"verbose"`          // 详细输出
+	ShowProgress    bool                   `json:"show_progress"`    // 显示进度
+	GitHubToken     string                 `json:"github_token"`     // GitHub令牌
+	NetworkConfig   *NetworkConfig         `json:"network_config"`   // 网络配置
+	HTTPConfig      *HTTPClientConfig      `json:"http_config"`      // HTTP客户端配置
+	ChunkSize       int64                  `json:"chunk_size"`       // 分块大小
+	EnableResume    bool                   `json:"enable_resume"`    // 启用断点续传
+	ProgressDisplay ProgressDisplay        `json:"-"`                // 进度显示器（不序列化）
+	ProgressCallback func(*ProgressInfo)   `json:"-"`                // 进度回调（不序列化）
+	MaxConcurrent   int                    `json:"max_concurrent"`   // 最大并发下载数
+	VerifyChecksum  bool                   `json:"verify_checksum"`  // 验证校验和
+	Checksum        string                 `json:"checksum"`         // 预期校验和
+	ChecksumType    string                 `json:"checksum_type"`    // 校验和类型（md5, sha1, sha256）
 }
 
 // GitHubRelease GitHub发布信息
@@ -373,6 +522,8 @@ type SystemOperations interface {
 	ListDirectory(path string) ([]string, error)
 	
 	// 文件操作
+	ReadFile(path string) ([]byte, error)
+	WriteFile(path string, data []byte) error
 	CopyFile(src, dst string) error
 	MoveFile(src, dst string) error
 	FileExists(path string) bool

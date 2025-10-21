@@ -503,7 +503,14 @@ func (h *InitHandler) checkTools(tracker *ui.StepTracker, opts types.InitOptions
 	tracker.SetStepRunning("check_tools", "Checking required tools")
 
 	tools := config.GetRequiredTools(opts.AIAssistant)
-	if !h.toolChecker.CheckAllTools(tools, tracker) {
+	
+	// 创建一个types.StepTracker来传递给CheckAllTools
+	typesTracker := &types.StepTracker{
+		Title: "Tool Check",
+		Steps: make(map[string]*types.Step),
+	}
+	
+	if !h.toolChecker.CheckAllTools(tools, typesTracker) {
 		tracker.SetStepError("check_tools", "Some required tools are missing")
 		return fmt.Errorf("required tools are missing")
 	}

@@ -18,7 +18,7 @@ import (
 //   go run examples/ui_demo.go
 
 func main() {
-	fmt.Println("=== require-gen UI组件演示 ===\n")
+	fmt.Println("=== require-gen UI组件演示 ===")
 
 	// 演示1: 主题系统
 	demonstrateThemes()

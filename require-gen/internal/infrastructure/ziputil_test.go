@@ -98,6 +98,18 @@ func (m *MockSystemOperations) CheckPermissions(path, permission string) (bool, 
 func (m *MockSystemOperations) CreateTempFile(pattern string) (string, error) {
 	return "/tmp/test", nil
 }
+
+func (m *MockSystemOperations) ReadFile(path string) ([]byte, error) {
+	if !m.files[path] {
+		return nil, fmt.Errorf("file not found: %s", path)
+	}
+	return []byte("mock file content"), nil
+}
+
+func (m *MockSystemOperations) WriteFile(path string, data []byte) error {
+	m.files[path] = true
+	return nil
+}
 func (m *MockSystemOperations) CreateTempDirectory(pattern string) (string, error) {
 	dir := fmt.Sprintf("/tmp/%s", pattern)
 	m.tempDirs = append(m.tempDirs, dir)

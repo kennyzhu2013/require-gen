@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -43,6 +44,32 @@ import (
 // - 跨平台脚本的执行
 type SystemOperations struct{
 	securityConfig *SecurityConfig // 安全配置
+	tempManager    *TempFileManager // 临时文件管理器
+}
+
+// TempFileManager 临时文件管理器
+type TempFileManager struct {
+	mu        sync.RWMutex
+	tempFiles map[string]*TempFileInfo // 临时文件跟踪
+	tempDirs  map[string]*TempDirInfo  // 临时目录跟踪
+	cleanupCh chan string              // 清理通道
+	stopCh    chan struct{}            // 停止通道
+}
+
+// TempFileInfo 临时文件信息
+type TempFileInfo struct {
+	Path      string    // 文件路径
+	CreatedAt time.Time // 创建时间
+	TTL       time.Duration // 生存时间
+	AutoClean bool      // 是否自动清理
+}
+
+// TempDirInfo 临时目录信息
+type TempDirInfo struct {
+	Path      string    // 目录路径
+	CreatedAt time.Time // 创建时间
+	TTL       time.Duration // 生存时间
+	AutoClean bool      // 是否自动清理
 }
 
 // NewSystemOperations 创建新的系统操作实例
@@ -70,7 +97,22 @@ type SystemOperations struct{
 // - 建议在需要时创建，避免全局单例
 // - 实例方法均为线程安全的
 func NewSystemOperations() types.SystemOperations {
-	return &SystemOperations{}
+	tempManager := &TempFileManager{
+		tempFiles: make(map[string]*TempFileInfo),
+		tempDirs:  make(map[string]*TempDirInfo),
+		cleanupCh: make(chan string, 100),
+		stopCh:    make(chan struct{}),
+	}
+	
+	sysOps := &SystemOperations{
+		securityConfig: DefaultSecurityConfig(),
+		tempManager:    tempManager,
+	}
+	
+	// 启动临时文件清理协程
+	go sysOps.startTempFileCleanup()
+	
+	return sysOps
 }
 
 // GetOS 获取操作系统信息
@@ -508,6 +550,39 @@ func (so *SystemOperations) FileExists(path string) bool {
 	return !os.IsNotExist(err)
 }
 
+// ReadFile 读取文件内容
+func (so *SystemOperations) ReadFile(path string) ([]byte, error) {
+	if err := so.validatePathSecurity(path, "READ_FILE"); err != nil {
+		return nil, err
+	}
+	
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, so.handleFileError("READ_FILE", path, err)
+	}
+	
+	return data, nil
+}
+
+// WriteFile 写入文件内容
+func (so *SystemOperations) WriteFile(path string, data []byte) error {
+	if err := so.validatePathSecurity(path, "WRITE_FILE"); err != nil {
+		return err
+	}
+	
+	// 创建目标目录
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return so.handleFileError("WRITE_FILE", path, err)
+	}
+	
+	err := os.WriteFile(path, data, 0644)
+	if err != nil {
+		return so.handleFileError("WRITE_FILE", path, err)
+	}
+	
+	return nil
+}
+
 // DirectoryExists 检查目录是否存在
 func (so *SystemOperations) DirectoryExists(path string) bool {
 	info, err := os.Stat(path)
@@ -626,7 +701,12 @@ func (so *SystemOperations) CreateTempFile(pattern string) (string, error) {
 	}
 	defer file.Close()
 
-	return file.Name(), nil
+	path := file.Name()
+	
+	// 注册到临时文件管理器
+	so.registerTempFile(path, 24*time.Hour, true)
+
+	return path, nil
 }
 
 // CreateTempDirectory 创建临时目录
@@ -635,6 +715,38 @@ func (so *SystemOperations) CreateTempDirectory(pattern string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
+
+	// 注册到临时文件管理器
+	so.registerTempDir(dir, 24*time.Hour, true)
+
+	return dir, nil
+}
+
+// CreateTempFileWithTTL 创建带生存时间的临时文件
+func (so *SystemOperations) CreateTempFileWithTTL(pattern string, ttl time.Duration) (string, error) {
+	file, err := os.CreateTemp("", pattern)
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer file.Close()
+
+	path := file.Name()
+	
+	// 注册到临时文件管理器
+	so.registerTempFile(path, ttl, true)
+
+	return path, nil
+}
+
+// CreateTempDirectoryWithTTL 创建带生存时间的临时目录
+func (so *SystemOperations) CreateTempDirectoryWithTTL(pattern string, ttl time.Duration) (string, error) {
+	dir, err := os.MkdirTemp("", pattern)
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp directory: %w", err)
+	}
+
+	// 注册到临时文件管理器
+	so.registerTempDir(dir, ttl, true)
 
 	return dir, nil
 }
@@ -1516,4 +1628,179 @@ func (so *SystemOperations) ListZipArchiveContents(zipPath string) ([]string, er
 	
 	// 执行ZIP内容列举
 	return zipProcessor.ListZipContents(zipPath)
+}
+
+// 临时文件管理器相关方法
+
+// registerTempFile 注册临时文件
+func (so *SystemOperations) registerTempFile(path string, ttl time.Duration, autoClean bool) {
+	if so.tempManager == nil {
+		return
+	}
+	
+	so.tempManager.mu.Lock()
+	defer so.tempManager.mu.Unlock()
+	
+	so.tempManager.tempFiles[path] = &TempFileInfo{
+		Path:      path,
+		CreatedAt: time.Now(),
+		TTL:       ttl,
+		AutoClean: autoClean,
+	}
+}
+
+// registerTempDir 注册临时目录
+func (so *SystemOperations) registerTempDir(path string, ttl time.Duration, autoClean bool) {
+	if so.tempManager == nil {
+		return
+	}
+	
+	so.tempManager.mu.Lock()
+	defer so.tempManager.mu.Unlock()
+	
+	so.tempManager.tempDirs[path] = &TempDirInfo{
+		Path:      path,
+		CreatedAt: time.Now(),
+		TTL:       ttl,
+		AutoClean: autoClean,
+	}
+}
+
+// startTempFileCleanup 启动临时文件清理协程
+func (so *SystemOperations) startTempFileCleanup() {
+	ticker := time.NewTicker(5 * time.Minute) // 每5分钟检查一次
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-ticker.C:
+			so.cleanupExpiredTempFiles()
+		case path := <-so.tempManager.cleanupCh:
+			so.cleanupSpecificPath(path)
+		case <-so.tempManager.stopCh:
+			return
+		}
+	}
+}
+
+// cleanupExpiredTempFiles 清理过期的临时文件
+func (so *SystemOperations) cleanupExpiredTempFiles() {
+	if so.tempManager == nil {
+		return
+	}
+	
+	now := time.Now()
+	
+	// 清理过期的临时文件
+	so.tempManager.mu.Lock()
+	for path, info := range so.tempManager.tempFiles {
+		if info.AutoClean && now.Sub(info.CreatedAt) > info.TTL {
+			if so.FileExists(path) {
+				os.Remove(path)
+			}
+			delete(so.tempManager.tempFiles, path)
+		}
+	}
+	
+	// 清理过期的临时目录
+	for path, info := range so.tempManager.tempDirs {
+		if info.AutoClean && now.Sub(info.CreatedAt) > info.TTL {
+			if so.DirectoryExists(path) {
+				os.RemoveAll(path)
+			}
+			delete(so.tempManager.tempDirs, path)
+		}
+	}
+	so.tempManager.mu.Unlock()
+}
+
+// cleanupSpecificPath 清理指定路径
+func (so *SystemOperations) cleanupSpecificPath(path string) {
+	if so.tempManager == nil {
+		return
+	}
+	
+	so.tempManager.mu.Lock()
+	defer so.tempManager.mu.Unlock()
+	
+	// 检查是否为临时文件
+	if _, exists := so.tempManager.tempFiles[path]; exists {
+		if so.FileExists(path) {
+			os.Remove(path)
+		}
+		delete(so.tempManager.tempFiles, path)
+		return
+	}
+	
+	// 检查是否为临时目录
+	if _, exists := so.tempManager.tempDirs[path]; exists {
+		if so.DirectoryExists(path) {
+			os.RemoveAll(path)
+		}
+		delete(so.tempManager.tempDirs, path)
+	}
+}
+
+// CleanupTempFile 手动清理临时文件
+func (so *SystemOperations) CleanupTempFile(path string) error {
+	if so.tempManager == nil {
+		return fmt.Errorf("temp manager not initialized")
+	}
+	
+	select {
+	case so.tempManager.cleanupCh <- path:
+		return nil
+	default:
+		// 如果通道满了，直接清理
+		so.cleanupSpecificPath(path)
+		return nil
+	}
+}
+
+// CleanupAllTempFiles 清理所有临时文件
+func (so *SystemOperations) CleanupAllTempFiles() {
+	if so.tempManager == nil {
+		return
+	}
+	
+	so.tempManager.mu.Lock()
+	defer so.tempManager.mu.Unlock()
+	
+	// 清理所有临时文件
+	for path := range so.tempManager.tempFiles {
+		if so.FileExists(path) {
+			os.Remove(path)
+		}
+	}
+	so.tempManager.tempFiles = make(map[string]*TempFileInfo)
+	
+	// 清理所有临时目录
+	for path := range so.tempManager.tempDirs {
+		if so.DirectoryExists(path) {
+			os.RemoveAll(path)
+		}
+	}
+	so.tempManager.tempDirs = make(map[string]*TempDirInfo)
+}
+
+// GetTempFileCount 获取临时文件数量
+func (so *SystemOperations) GetTempFileCount() (int, int) {
+	if so.tempManager == nil {
+		return 0, 0
+	}
+	
+	so.tempManager.mu.RLock()
+	defer so.tempManager.mu.RUnlock()
+	
+	return len(so.tempManager.tempFiles), len(so.tempManager.tempDirs)
+}
+
+// StopTempFileManager 停止临时文件管理器
+func (so *SystemOperations) StopTempFileManager() {
+	if so.tempManager == nil {
+		return
+	}
+	
+	close(so.tempManager.stopCh)
+	so.CleanupAllTempFiles()
 }
