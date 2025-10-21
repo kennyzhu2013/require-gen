@@ -1,8 +1,8 @@
 {
   "project_name": "test-force-flag",
   "version": "1.0.0",
-  "description": "Project created with require-gen CLI for copilot",
-  "ai_assistant": "copilot",
+  "description": "Project created with require-gen CLI for claude",
+  "ai_assistant": "claude",
   "script_type": "ps",
   "git_enabled": true,
   "tools": [],
@@ -13,6 +13,6 @@
     "skip_tls_verify": false,
     "verbose_output": false
   },
-  "created_at": "2025-10-21T17:55:13+08:00",
-  "updated_at": "2025-10-21T17:55:13+08:00"
+  "created_at": "2025-10-21T17:55:23+08:00",
+  "updated_at": "2025-10-21T17:55:23+08:00"
 }
