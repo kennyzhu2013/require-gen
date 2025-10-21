@@ -83,6 +83,7 @@ func init() {
 	// 添加子命令
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(downloadCmd)
+	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(configCmd)
 }

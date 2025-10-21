@@ -234,21 +234,27 @@ func (tp *TemplateProvider) Validate(path string) error {
 		return fmt.Errorf("template path does not exist: %s", path)
 	}
 
-	// 检查必需的文件
+	// 查找.specify目录（模板的实际位置）
+	specifyDir := filepath.Join(path, ".specify")
+	if _, err := os.Stat(specifyDir); os.IsNotExist(err) {
+		return fmt.Errorf("template directory not found: .specify")
+	}
+
+	// 检查必需的文件在templates目录中
+	templatesDir := filepath.Join(specifyDir, "templates")
 	requiredFiles := []string{
-		"README.md",
 		"spec-template.md",
 	}
 
 	for _, file := range requiredFiles {
-		filePath := filepath.Join(path, file)
+		filePath := filepath.Join(templatesDir, file)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return fmt.Errorf("required file missing: %s", file)
 		}
 	}
 
-	// 验证模板结构
-	if err := tp.validateTemplateStructure(path); err != nil {
+	// 验证模板结构（使用.specify目录）
+	if err := tp.validateTemplateStructure(specifyDir); err != nil {
 		return fmt.Errorf("invalid template structure: %w", err)
 	}
 

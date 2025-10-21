@@ -223,13 +223,18 @@ type ScriptType struct {
 //       Verbose:     true,
 //   }
 type InitOptions struct {
-	ProjectName  string
-	Here         bool
-	AIAssistant  string
-	ScriptType   string
-	GitHubToken  string
-	Verbose      bool
-	Debug        bool
+	ProjectName     string
+	Here            bool
+	AIAssistant     string
+	ScriptType      string
+	GitHubToken     string
+	Verbose         bool
+	Debug           bool
+	// 新增的CLI标志
+	Force           bool   // --force 标志：强制覆盖现有项目目录
+	NoGit           bool   // --no-git 标志：跳过Git仓库初始化
+	IgnoreTools     bool   // --ignore-agent-tools 标志：忽略AI助手工具的可用性检查
+	SkipTLS         bool   // --skip-tls 标志：跳过TLS证书验证
 }
 
 // DownloadOptions 下载选项配置
@@ -240,6 +245,7 @@ type DownloadOptions struct {
 	Verbose         bool                   `json:"verbose"`          // 详细输出
 	ShowProgress    bool                   `json:"show_progress"`    // 显示进度
 	GitHubToken     string                 `json:"github_token"`     // GitHub令牌
+	SkipTLS         bool                   `json:"skip_tls"`         // 跳过TLS证书验证
 	NetworkConfig   *NetworkConfig         `json:"network_config"`   // 网络配置
 	HTTPConfig      *HTTPClientConfig      `json:"http_config"`      // HTTP客户端配置
 	ChunkSize       int64                  `json:"chunk_size"`       // 分块大小

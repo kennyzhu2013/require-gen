@@ -1,9 +1,11 @@
 package business
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"specify-cli/internal/config"
 	"specify-cli/internal/infrastructure"
@@ -500,6 +502,12 @@ func (h *InitHandler) selectScriptType(tracker *ui.StepTracker, opts *types.Init
 //   - 版本不兼容错误：显示期望版本和实际版本
 //   - 权限错误：工具存在但无执行权限
 func (h *InitHandler) checkTools(tracker *ui.StepTracker, opts types.InitOptions) error {
+	// 如果使用--ignore-agent-tools标志，跳过工具检查
+	if opts.IgnoreTools {
+		tracker.SetStepSkipped("check_tools", "Tool checks skipped (--ignore-agent-tools flag)")
+		return nil
+	}
+
 	tracker.SetStepRunning("check_tools", "Checking required tools")
 
 	tools := config.GetRequiredTools(opts.AIAssistant)
@@ -646,6 +654,7 @@ func (h *InitHandler) downloadTemplate(tracker *ui.StepTracker, opts types.InitO
 		Verbose:      opts.Verbose,
 		ShowProgress: true,
 		GitHubToken:  opts.GitHubToken,
+		SkipTLS:      opts.SkipTLS,  // 传递SkipTLS标志到下载选项
 	}
 
 	templatePath, err := h.templateProvider.Download(downloadOpts)
@@ -713,6 +722,12 @@ func (h *InitHandler) downloadTemplate(tracker *ui.StepTracker, opts types.InitO
 //   - 父目录中存在.git目录（子模块场景）
 //   - 用户明确禁用了Git初始化
 func (h *InitHandler) initializeGit(tracker *ui.StepTracker, opts types.InitOptions) error {
+	// 如果使用--no-git标志，跳过Git初始化
+	if opts.NoGit {
+		tracker.SetStepSkipped("init_git", "Git initialization skipped (--no-git flag)")
+		return nil
+	}
+
 	tracker.SetStepRunning("init_git", "Initializing Git repository")
 
 	cwd, _ := os.Getwd()
@@ -796,10 +811,40 @@ func (h *InitHandler) initializeGit(tracker *ui.StepTracker, opts types.InitOpti
 func (h *InitHandler) configureProject(tracker *ui.StepTracker, opts types.InitOptions) error {
 	tracker.SetStepRunning("configure", "Configuring project settings")
 
-	// 这里可以添加项目配置逻辑
-	// 例如：创建配置文件、设置环境变量等
+	// 创建项目配置
+	config := &types.ProjectConfig{
+		ProjectName: opts.ProjectName,
+		Version:     "1.0.0",
+		Description: fmt.Sprintf("Project created with require-gen CLI for %s", opts.AIAssistant),
+		AIAssistant: opts.AIAssistant,
+		ScriptType:  opts.ScriptType,
+		GitEnabled:  !opts.NoGit,
+		Tools:       []string{}, // 可以根据AI助手类型填充
+		CustomSettings: map[string]interface{}{
+			"force_overwrite":    opts.Force,
+			"skip_tls_verify":    opts.SkipTLS,
+			"ignore_tool_check":  opts.IgnoreTools,
+			"verbose_output":     opts.Verbose,
+			"debug_mode":         opts.Debug,
+		},
+		CreatedAt: time.Now().Format(time.RFC3339),
+		UpdatedAt: time.Now().Format(time.RFC3339),
+	}
 
-	tracker.SetStepDone("configure", "Project configured successfully")
+	// 保存配置文件
+	configPath := filepath.Join(".", "require-gen.json")
+	if err := h.saveProjectConfig(config, configPath); err != nil {
+		tracker.SetStepError("configure", fmt.Sprintf("Failed to save config: %v", err))
+		return fmt.Errorf("failed to save project configuration: %w", err)
+	}
+
+	// 验证配置
+	if err := h.validateProjectConfig(config); err != nil {
+		tracker.SetStepError("configure", fmt.Sprintf("Config validation failed: %v", err))
+		return fmt.Errorf("project configuration validation failed: %w", err)
+	}
+
+	tracker.SetStepDone("configure", fmt.Sprintf("Project configured successfully (config: %s)", configPath))
 	return nil
 }
 
@@ -875,5 +920,48 @@ func (h *InitHandler) finalizeSetup(tracker *ui.StepTracker, opts types.InitOpti
 	}
 
 	tracker.SetStepDone("complete", "Project setup completed")
+	return nil
+}
+
+// saveProjectConfig 保存项目配置到JSON文件
+func (h *InitHandler) saveProjectConfig(config *types.ProjectConfig, filePath string) error {
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
+// validateProjectConfig 验证项目配置的有效性
+func (h *InitHandler) validateProjectConfig(config *types.ProjectConfig) error {
+	if config.ProjectName == "" {
+		return fmt.Errorf("project name cannot be empty")
+	}
+
+	if config.AIAssistant == "" {
+		return fmt.Errorf("AI assistant must be specified")
+	}
+
+	if config.ScriptType == "" {
+		return fmt.Errorf("script type must be specified")
+	}
+
+	if config.Version == "" {
+		return fmt.Errorf("version cannot be empty")
+	}
+
+	// 验证自定义设置
+	if config.CustomSettings != nil {
+		// 可以添加更多的自定义设置验证逻辑
+		if _, exists := config.CustomSettings["force_overwrite"]; !exists {
+			config.CustomSettings["force_overwrite"] = false
+		}
+	}
+
 	return nil
 }

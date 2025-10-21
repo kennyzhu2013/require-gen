@@ -23,9 +23,11 @@
 23，按照之前写的系统测试用例对代码分步骤分功能模块执行严格的系统测试，校验出错的功能，并分解规划对应的测试和代码bug修复任务
 24，跳过服务层集成测试，进行下一步任务，直接执行UI层和系统层的测试，是否是
 
-
+首先template的处理：
 
 1，golanganalyse.md首先参考golang分析用golang实现其中的配置管理模块，满足需求描述specify.md中对配置实体和配置管理功能要求，包括配置实体的定义、配置文件的解析、配置的读取和写入等。
+
+2， 之前分析的 infrastructure_Layer_detail.md 中模板管理模块功能Go和Python实现对比分析结果，分析下 template.go 是如何实现和python完全一样功能，并校验下有没遗漏
 
 
 2，__init__.py 详细分析speckit的python源码，结合之前分析结果 pythonanalyse.md 列出里面 Infrastructure Layer 详细功能，尽量细致并把结果保存到requiregenDocs/ infrastructure Layer 目录下文件名2_infrastructure_Layer .md
@@ -54,6 +56,39 @@
 13，__init__.py 详细分析speckit的python源码，结合之前分析结果 pythonanalyse.md 列出里面UI Components Layer详细功能，尽量细致并把结果保存到requiregenDocs/config目录下文件名1_config.md
 
 14，以上分析的UI Components Layer详细功能，对应golang实现框架里的哪些代码，依赖哪些模块或函数，尽量分析细致并把结果保存到requiregenDocs/UI目录下文件名ui_detail.md
+
+
+之前分析的 infrastructure_Layer_detail.md 中模板管理模块功能Go和Python实现对比分析结果，分析下 template.go 是如何实现和python完全一样功能，并校验下有没遗漏
+围绕以上分析的template.go的golang实现缺失或遗漏的五点，判断golang整个Infrastructure Layer实现代码目录 infrastructure 有没类似函数，结合 2_infrastructure_Layer.md 的架构设计方案，给出最合理的代码修改方案
+根据以上推荐的方案一，增强现有的template.go来实现完整功能，低优先级的可选实施暂时不考虑
+校验以上的修改，并测试修改的功能
+注意校验以上的修改，并测试修改的功能只需要测试template.go的功能即可
+
+1,infrastructure_Layer_detail.md 中分析的模板网络通信模块功能Go和Python实现对比分析结果，分析校验下当前golang的实现网络通信模块有没遗漏功能或者偏差
+2,针对以上分析结果，修复实际实现的偏差及与Python实现的功能差距
+3,不要日志监控等中间件，去掉MiddlewareChain，重新确认下实际实现的偏差及与Python实现的功能差距是否修复并测试验证
+4,对golang实现的 Infrastructure Layer 和设计文档 2_infrastructure_Layer.md 对比分析
+5,再分析下Golang实现的Infrastructure Layer代码有没功能重复的或可优化地方建议
+6,首先根据以上优化建议分析中的功能重复问题给的优化建议，优化对应的代码
+7,
+
+根据Python版本的全局配置模块分析结果 1_config.md ,对比下go实现对应关系，校验有没遗漏偏差并标出go的实现代码
+8,根据之前分析结果 pythonanalyse.md 列出里面 Business Logic Layer详细功能，参考speckit的python源码 __init__.py ，详细分析Business Logic Layer模块功能并把结果保存到requiregenDocs/business目录下文件名4_business_layer .md
+9,以上分析的Business Logic Layer对应golang实现框架里的哪些代码，依赖哪些模块或函数，尽量细致并把结果保存到requiregenDocs/business目录下文件名business_layer_detail.md
+10,根据python版本实现的Business Logic Layer分析文档 4_business_layer.md 和go版本实现的对比分析文档 business_layer_detail.md ，校验go框架下实现有没遗漏和偏差，并在目录examples下写集成测试代码business_demo.go验证下Business Logic Layer的核心功能和调用链是否正确
+11,根据之前分析结果 pythonanalyse.md 列出里面CLI Interface Layer  详细功能，参考speckit的python源码 __init__.py ，详细分析CLI Interface Layer  模块功能并把结果保存到requiregenDocs/cli目录下文件名5_cli_layer.md
+12,以上分析的CLI Interface Layer功能对应golang实现框架里的哪些代码，依赖哪些模块或函数，有无偏差，尽量细致并把结果保存到requiregenDocs/business目录下文件名cli_layer_detail.md
+13,根据python版本实现的CLI Interface Layer分析文档 5_cli_layer.md 和go版本实现的对比分析文档 cli_layer_detail.md ，校验go框架下实现有没遗漏和偏差，并在目录examples下写集成测试代码cli_demo.go验证下CLI Interface Layer的核心功能和依赖调用链是否正确
+14,将以上分析结果保存到cli目录下diff.md文件
+15,diff.md 根据分析结果，golang版本的Check命令实当前在哪实现，建议怎么实现
+16, 按照上面推荐的方案1实现独立check命令
+17,
+
+diff.md 针对分析文档中提到的缺失的BannerGroup功能，golang通过 ui.ShowBanner() 中手动调用是否实现了一样的功能？
+18, cli_demo.go cli集成测试时测试CLI流程的模板下载功能返回“模板下载 - 模拟错误：网络连接失败”，请分析下具体原因
+19, golanganalyse.md 根据之前分析的init命令完整流程，进行系统的完整init命令流程校验和测试
+20, 刚刚运行的specify.exe init --help没有显示banner横幅，请在对应的处理命令地方调用ui.ShowBanner() 显示banner
+21, 
 
 
 执行：

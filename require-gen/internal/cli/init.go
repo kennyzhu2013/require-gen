@@ -19,6 +19,11 @@ var (
 	aiAssistant string
 	scriptType  string
 	githubToken string
+	// 新增的CLI标志
+	force       bool
+	noGit       bool
+	ignoreTools bool
+	skipTLS     bool
 )
 
 // initCmd init子命令
@@ -38,7 +43,11 @@ Examples:
   specify init my-project                    # Create new project in ./my-project
   specify init --here                       # Initialize in current directory
   specify init my-project --ai claude-code  # Use specific AI assistant
-  specify init my-project --script ps       # Use PowerShell scripts`,
+  specify init my-project --script ps       # Use PowerShell scripts
+  specify init my-project --force           # Force overwrite existing directory
+  specify init my-project --no-git          # Skip Git repository initialization
+  specify init my-project --ignore-agent-tools  # Ignore tool availability checks
+  specify init my-project --skip-tls        # Skip TLS certificate verification`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runInit,
 }
@@ -50,6 +59,12 @@ func init() {
 	initCmd.Flags().StringVarP(&aiAssistant, "ai", "a", "", "AI assistant to use")
 	initCmd.Flags().StringVarP(&scriptType, "script", "s", "", "Script type (sh/ps)")
 	initCmd.Flags().StringVarP(&githubToken, "token", "t", "", "GitHub token for private repositories")
+	
+	// 新增的CLI标志
+	initCmd.Flags().BoolVar(&force, "force", false, "Force overwrite existing project directory")
+	initCmd.Flags().BoolVar(&noGit, "no-git", false, "Skip Git repository initialization")
+	initCmd.Flags().BoolVar(&ignoreTools, "ignore-agent-tools", false, "Ignore AI assistant tool availability checks")
+	initCmd.Flags().BoolVar(&skipTLS, "skip-tls", false, "Skip TLS certificate verification")
 }
 
 // runInit 执行init命令
@@ -66,13 +81,18 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// 构建初始化选项
 	opts := types.InitOptions{
-		ProjectName: projectName,
-		Here:        here,
-		AIAssistant: aiAssistant,
-		ScriptType:  scriptType,
-		GitHubToken: githubToken,
-		Verbose:     GetVerbose(),
-		Debug:       GetDebug(),
+		ProjectName:  projectName,
+		Here:         here,
+		AIAssistant:  aiAssistant,
+		ScriptType:   scriptType,
+		GitHubToken:  githubToken,
+		Verbose:      GetVerbose(),
+		Debug:        GetDebug(),
+		// 新增的CLI标志
+		Force:        force,
+		NoGit:        noGit,
+		IgnoreTools:  ignoreTools,
+		SkipTLS:      skipTLS,
 	}
 
 	// 显示横幅
@@ -109,7 +129,9 @@ func validateInitOptions(opts *types.InitOptions) error {
 
 		// 检查目录是否已存在
 		if _, err := os.Stat(opts.ProjectName); err == nil {
-			return fmt.Errorf("directory '%s' already exists", opts.ProjectName)
+			if !opts.Force {
+				return fmt.Errorf("directory '%s' already exists. Use --force to overwrite", opts.ProjectName)
+			}
 		}
 	} else {
 		// 检查当前目录是否为空
@@ -123,8 +145,8 @@ func validateInitOptions(opts *types.InitOptions) error {
 			return fmt.Errorf("failed to read current directory: %w", err)
 		}
 
-		if len(entries) > 0 {
-			fmt.Printf("Warning: Current directory '%s' is not empty\n", filepath.Base(cwd))
+		if len(entries) > 0 && !opts.Force {
+			return fmt.Errorf("current directory '%s' is not empty. Use --force to overwrite", filepath.Base(cwd))
 		}
 	}
 
