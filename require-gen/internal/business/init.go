@@ -575,6 +575,12 @@ func (h *InitHandler) createProjectDirectory(tracker *ui.StepTracker, opts types
 	tracker.SetStepRunning("create_dir", "Creating project directory")
 
 	if !opts.Here {
+		// 检查目录是否已存在
+		if _, err := os.Stat(opts.ProjectName); err == nil {
+			tracker.SetStepError("create_dir", fmt.Sprintf("Directory '%s' already exists", opts.ProjectName))
+			return fmt.Errorf("directory '%s' already exists. Please choose a different project name or remove the existing directory", opts.ProjectName)
+		}
+
 		if err := os.MkdirAll(opts.ProjectName, 0755); err != nil {
 			tracker.SetStepError("create_dir", fmt.Sprintf("Failed to create directory: %v", err))
 			return fmt.Errorf("failed to create project directory: %w", err)
@@ -587,8 +593,34 @@ func (h *InitHandler) createProjectDirectory(tracker *ui.StepTracker, opts types
 
 		tracker.SetStepDone("create_dir", fmt.Sprintf("Created and entered directory: %s", opts.ProjectName))
 	} else {
+		// 使用当前目录，检查是否为空
 		cwd, _ := os.Getwd()
-		tracker.SetStepDone("create_dir", fmt.Sprintf("Using current directory: %s", filepath.Base(cwd)))
+		entries, err := os.ReadDir(cwd)
+		if err != nil {
+			tracker.SetStepError("create_dir", fmt.Sprintf("Failed to read current directory: %v", err))
+			return fmt.Errorf("failed to read current directory: %w", err)
+		}
+
+		// 如果目录不为空，根据Force标志决定是否继续
+		if len(entries) > 0 {
+			if opts.Force {
+				ui.ShowWarning(fmt.Sprintf("Current directory is not empty (%d items). --force flag supplied: proceeding with merge", len(entries)))
+				tracker.SetStepDone("create_dir", fmt.Sprintf("Using current directory (forced merge): %s", filepath.Base(cwd)))
+			} else {
+				ui.ShowWarning(fmt.Sprintf("Current directory is not empty (%d items)", len(entries)))
+				ui.ShowWarning("Template files will be merged with existing content and may overwrite existing files")
+				
+				// 在Go版本中，我们可以使用UI组件来询问用户确认
+				confirmed := h.uiRenderer.ConfirmAction("Do you want to continue?")
+				if !confirmed {
+					ui.ShowWarning("Operation cancelled")
+					return fmt.Errorf("operation cancelled by user")
+				}
+				tracker.SetStepDone("create_dir", fmt.Sprintf("Using current directory (user confirmed): %s", filepath.Base(cwd)))
+			}
+		} else {
+			tracker.SetStepDone("create_dir", fmt.Sprintf("Using current directory: %s", filepath.Base(cwd)))
+		}
 	}
 
 	return nil

@@ -189,6 +189,15 @@ func (tp *TemplateProvider) buildTLSConfig(tlsConf *types.TLSConfig) (*tls.Confi
 
 // Download 下载模板
 func (tp *TemplateProvider) Download(opts types.DownloadOptions) (string, error) {
+	// 根据SkipTLS标志动态配置TLS设置
+	if opts.SkipTLS {
+		// 创建跳过TLS验证的配置
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true,
+		}
+		tp.client.SetTLSClientConfig(tlsConfig)
+	}
+
 	// 获取AI助手信息
 	agentInfo, exists := config.GetAgentInfo(opts.AIAssistant)
 	if !exists {
@@ -339,24 +348,30 @@ func (tp *TemplateProvider) downloadWithEnhancedProgress(url, filePath string, s
 		}
 
 		// 应用TLS配置
-		if tp.networkConfig != nil && tp.networkConfig.TLS != nil {
-			tlsConfig, err := tp.buildTLSConfig(tp.networkConfig.TLS)
-			if err == nil {
-				transport := &http.Transport{
-					TLSClientConfig: tlsConfig,
-				}
-				client.Transport = transport
+		var tlsConfig *tls.Config
+		if opts.SkipTLS {
+			// 如果设置了SkipTLS标志，跳过TLS验证
+			tlsConfig = &tls.Config{
+				InsecureSkipVerify: true,
+			}
+		} else if tp.networkConfig != nil && tp.networkConfig.TLS != nil {
+			// 否则使用网络配置中的TLS设置
+			var err error
+			tlsConfig, err = tp.buildTLSConfig(tp.networkConfig.TLS)
+			if err != nil {
+				return fmt.Errorf("failed to build TLS config: %w", err)
 			}
 		}
 
-		// 使用流式下载器
-		downloader := &StreamingDownloader{
-			client:       client,
-			chunkSize:    1024 * 1024, // 1MB
-			maxRetries:   3,
-			retryWait:    2 * time.Second,
-			maxRetryWait: 10 * time.Second,
+		if tlsConfig != nil {
+			transport := &http.Transport{
+				TLSClientConfig: tlsConfig,
+			}
+			client.Transport = transport
 		}
+
+		// 使用流式下载器
+		downloader := NewStreamingDownloader(client, 1024*1024) // 1MB
 		return downloader.DownloadWithStreaming(url, filePath, &opts)
 	}
 

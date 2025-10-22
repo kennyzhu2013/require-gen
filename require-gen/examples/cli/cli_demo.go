@@ -31,7 +31,7 @@ import (
 // - Go版本新增功能验证
 // - 错误处理机制测试
 // - 跨平台兼容性验证
-func main() {
+func mainEn() {
 	fmt.Println("=== CLI Interface Layer Integration Test Demo ===")
 	fmt.Println("Testing Go version CLI implementation against Python specification")
 	fmt.Println()
@@ -76,7 +76,6 @@ func main() {
 	testDependencyCallChain()
 	fmt.Println()
 
-	checkMain()
 	fmt.Println()
 
 	fmt.Println("✅ CLI Interface Layer Integration Test Completed")
