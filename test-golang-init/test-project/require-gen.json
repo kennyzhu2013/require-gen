@@ -1,0 +1,18 @@
+{
+  "project_name": "test-project",
+  "version": "1.0.0",
+  "description": "Project created with require-gen CLI for copilot",
+  "ai_assistant": "copilot",
+  "script_type": "sh",
+  "git_enabled": true,
+  "tools": [],
+  "custom_settings": {
+    "debug_mode": false,
+    "force_overwrite": false,
+    "ignore_tool_check": false,
+    "skip_tls_verify": false,
+    "verbose_output": false
+  },
+  "created_at": "2025-10-22T14:12:43+08:00",
+  "updated_at": "2025-10-22T14:12:43+08:00"
+}
