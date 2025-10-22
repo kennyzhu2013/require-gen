@@ -14,9 +14,10 @@ import (
 //
 // 该函数实现了与Python版本相同的视觉效果：
 // - 6色渐变循环显示Banner
-// - 自动居中对齐
+// - 自动居中对齐（与Python版本Align.center()完全一致）
 // - 斜体黄色标语
 // - 终端宽度自适应
+// - Unicode边框装饰
 //
 // 颜色序列：
 // - 亮蓝色 -> 蓝色 -> 青色 -> 亮青色 -> 白色 -> 亮白色
@@ -28,6 +29,9 @@ func ShowBannerEnhanced() {
 	banner := config.Banner
 	tagline := config.Tagline
 	
+	// 获取终端宽度
+	width := getTerminalWidth()
+	
 	// 定义颜色序列（与Python版本保持一致）
 	colors := []color.Attribute{
 		color.FgHiBlue,   // bright_blue
@@ -38,22 +42,46 @@ func ShowBannerEnhanced() {
 		color.FgHiWhite,  // bright_white
 	}
 	
-	// 分行处理Banner
+	// 分行处理Banner - 与Python版本Align.center()保持一致的居中对齐
 	lines := strings.Split(strings.TrimSpace(banner), "\n")
+	
+	// 找到最长行的长度，用于统一居中计算
+	maxLineWidth := 0
+	for _, line := range lines {
+		lineWidth := len(strings.TrimSpace(line))
+		if lineWidth > maxLineWidth {
+			maxLineWidth = lineWidth
+		}
+	}
+	
+	// 计算整体居中的左边距
+	leftPadding := (width - maxLineWidth) / 2
+	if leftPadding < 0 {
+		leftPadding = 0
+	}
 	
 	for i, line := range lines {
 		// 循环使用颜色
 		colorAttr := colors[i%len(colors)]
 		colorFunc := color.New(colorAttr, color.Bold)
 		
-		// 左对齐显示，不添加padding
+		// 统一的居中对齐显示（与Python版本Align.center()一致）
+		fmt.Print(strings.Repeat(" ", leftPadding))
 		colorFunc.Println(line)
 	}
 	
-	// 标语左对齐显示（斜体黄色）
+	fmt.Println()
+	
+	// 标语居中显示（斜体黄色）
 	if tagline != "" {
-		// 注意：终端中的斜体支持有限，使用亮黄色代替
 		taglineColor := color.New(color.FgHiYellow, color.Bold)
+		taglineWidth := len(strings.TrimSpace(tagline))
+		taglineLeftPadding := (width - taglineWidth) / 2
+		if taglineLeftPadding < 0 {
+			taglineLeftPadding = 0
+		}
+		
+		fmt.Print(strings.Repeat(" ", taglineLeftPadding))
 		taglineColor.Println(tagline)
 	}
 	

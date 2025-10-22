@@ -36,8 +36,8 @@ func WithBorderStyle(style color.Attribute) PanelOption {
 	}
 }
 
-// WithPadding 设置内边距
-func WithPadding(vertical, horizontal int) PanelOption {
+// WithPanelPadding 设置面板内边距
+func WithPanelPadding(vertical, horizontal int) PanelOption {
 	return func(p *Panel) {
 		p.padding = [2]int{vertical, horizontal}
 	}
@@ -87,7 +87,7 @@ func NewPanel(content, title string, options ...PanelOption) *Panel {
 // - ╔ ╗ ╚ ╝ (角落)
 // - ═ (水平线)
 // - ║ (垂直线)
-func (p *Panel) Render() {
+func (p *Panel) Render() string {
 	lines := strings.Split(p.content, "\n")
 	
 	// 计算内容的最大宽度
@@ -104,57 +104,60 @@ func (p *Panel) Render() {
 		totalWidth = p.minWidth
 	}
 	
+	var result strings.Builder
 	borderColor := color.New(p.borderStyle)
 	
-	// 绘制顶部边框
+	// 绘制顶部边框（圆角）
 	if p.title != "" {
 		titleLen := getDisplayWidth(p.title)
 		if titleLen+6 > totalWidth {
 			totalWidth = titleLen + 6 // 确保标题能完整显示
 		}
 		
-		borderColor.Print("╔══ ")
-		borderColor.Print(p.title)
-		borderColor.Print(" ")
-		borderColor.Print(strings.Repeat("═", totalWidth-titleLen-5))
-		borderColor.Println("╗")
+		result.WriteString(borderColor.Sprint("╭─── "))
+		result.WriteString(borderColor.Sprint(p.title))
+		result.WriteString(borderColor.Sprint(" "))
+		result.WriteString(borderColor.Sprint(strings.Repeat("─", totalWidth-titleLen-5)))
+		result.WriteString(borderColor.Sprintln("╮"))
 	} else {
-		borderColor.Print("╔")
-		borderColor.Print(strings.Repeat("═", totalWidth))
-		borderColor.Println("╗")
+		result.WriteString(borderColor.Sprint("╭"))
+		result.WriteString(borderColor.Sprint(strings.Repeat("─", totalWidth)))
+		result.WriteString(borderColor.Sprintln("╮"))
 	}
 	
 	// 绘制顶部内边距
 	for i := 0; i < p.padding[0]; i++ {
-		borderColor.Print("║")
-		fmt.Print(strings.Repeat(" ", totalWidth))
-		borderColor.Println("║")
+		result.WriteString(borderColor.Sprint("│"))
+		result.WriteString(strings.Repeat(" ", totalWidth))
+		result.WriteString(borderColor.Sprintln("│"))
 	}
 	
 	// 绘制内容行
 	for _, line := range lines {
-		borderColor.Print("║")
-		fmt.Print(strings.Repeat(" ", p.padding[1])) // 左内边距
-		fmt.Print(line)
+		result.WriteString(borderColor.Sprint("│"))
+		result.WriteString(strings.Repeat(" ", p.padding[1])) // 左内边距
+		result.WriteString(line)
 		// 右内边距（填充到总宽度）
 		rightPadding := totalWidth - getDisplayWidth(line) - p.padding[1]
 		if rightPadding > 0 {
-			fmt.Print(strings.Repeat(" ", rightPadding))
+			result.WriteString(strings.Repeat(" ", rightPadding))
 		}
-		borderColor.Println("║")
+		result.WriteString(borderColor.Sprintln("│"))
 	}
 	
 	// 绘制底部内边距
 	for i := 0; i < p.padding[0]; i++ {
-		borderColor.Print("║")
-		fmt.Print(strings.Repeat(" ", totalWidth))
-		borderColor.Println("║")
+		result.WriteString(borderColor.Sprint("│"))
+		result.WriteString(strings.Repeat(" ", totalWidth))
+		result.WriteString(borderColor.Sprintln("│"))
 	}
 	
-	// 绘制底部边框
-	borderColor.Print("╚")
-	borderColor.Print(strings.Repeat("═", totalWidth))
-	borderColor.Println("╝")
+	// 绘制底部边框（圆角）
+	result.WriteString(borderColor.Sprint("╰"))
+	result.WriteString(borderColor.Sprint(strings.Repeat("─", totalWidth)))
+	result.WriteString(borderColor.Sprintln("╯"))
+	
+	return result.String()
 }
 
 // RenderCompact 紧凑模式渲染
@@ -208,7 +211,7 @@ func CreateInfoPanel(title string, items map[string]string) *Panel {
 	
 	return NewPanel(content, title,
 		WithBorderStyle(color.FgCyan),
-		WithPadding(1, 2))
+		WithPanelPadding(1, 2))
 }
 
 // CreateMessagePanel 创建消息面板的便捷函数
@@ -240,5 +243,5 @@ func CreateMessagePanel(message, messageType string) *Panel {
 	
 	return NewPanel(message, title,
 		WithBorderStyle(borderColor),
-		WithPadding(1, 2))
+		WithPanelPadding(1, 2))
 }

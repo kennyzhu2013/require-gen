@@ -56,8 +56,12 @@ Examples:
 func initHelpFunc(cmd *cobra.Command, args []string) {
 	// 显示banner
 	ui.ShowBanner()
-	// 调用默认的help函数
-	cmd.Parent().HelpFunc()(cmd, args)
+	// 直接使用cobra的默认help模板，避免调用父命令的help函数
+	tmpl := cmd.HelpTemplate()
+	if tmpl == "" {
+		tmpl = cmd.UsageTemplate()
+	}
+	cmd.Print(cmd.UsageString())
 }
 
 func init() {

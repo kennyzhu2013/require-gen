@@ -82,7 +82,7 @@ func (epd *EnhancedProgressDisplay) Start(total int64) {
 	
 	// 创建进度条
 	options := []ui.ProgressBarOption{
-		ui.WithWidth(50),
+		ui.WithTableWidth(50),
 		ui.ClassicStyle(),
 		ui.WithColors(color.FgGreen, color.FgWhite),
 		ui.WithDisplayOptions(true, epd.showDetails, epd.showSpeed, epd.showETA),
@@ -206,7 +206,7 @@ func (mtpd *MultiTaskProgressDisplay) AddTask(id, name string, total int64) {
 	defer mtpd.mu.Unlock()
 	
 	progressBar := ui.NewProgressBar(total, name,
-		ui.WithWidth(40),
+		ui.WithTableWidth(40),
 		ui.ModernStyle(),
 		ui.WithDisplayOptions(true, true, false, false),
 	)

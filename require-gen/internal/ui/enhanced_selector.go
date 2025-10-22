@@ -69,7 +69,7 @@ func (s *EnhancedSelector) Render() {
 	// 创建选择面板
 	panel := NewPanel(s.createContent(), s.title, 
 		WithBorderStyle(color.FgCyan),
-		WithPadding(1, 2))
+		WithPanelPadding(1, 2))
 	panel.Render()
 }
 

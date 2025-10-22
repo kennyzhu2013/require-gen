@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/fatih/color"
@@ -16,11 +17,46 @@ type StepTracker struct {
 	statusOrder map[string]int
 	mutex       sync.RWMutex
 	observers   []types.StepObserver
+	
+	// 嵌套支持
+	children    []*StepTracker
+	parent      *StepTracker
+	level       int
+	indent      string
+	
+	// 显示选项
+	showProgress bool
+	showTiming   bool
+	compactMode  bool
+}
+
+// StepTrackerOption 步骤跟踪器选项函数类型
+type StepTrackerOption func(*StepTracker)
+
+// WithParentTracker 设置父跟踪器（用于嵌套）
+func WithParentTracker(parent *StepTracker) StepTrackerOption {
+	return func(st *StepTracker) {
+		st.parent = parent
+		if parent != nil {
+			st.level = parent.level + 1
+			st.indent = strings.Repeat("  ", st.level)
+			parent.children = append(parent.children, st)
+		}
+	}
+}
+
+// WithTrackerDisplayOptions 设置显示选项
+func WithTrackerDisplayOptions(showProgress, showTiming, compactMode bool) StepTrackerOption {
+	return func(st *StepTracker) {
+		st.showProgress = showProgress
+		st.showTiming = showTiming
+		st.compactMode = compactMode
+	}
 }
 
 // NewStepTracker 创建新的步骤跟踪器
-func NewStepTracker(title string) *StepTracker {
-	return &StepTracker{
+func NewStepTracker(title string, options ...StepTrackerOption) *StepTracker {
+	tracker := &StepTracker{
 		title: title,
 		steps: make(map[string]*types.Step),
 		statusOrder: map[string]int{
@@ -31,7 +67,16 @@ func NewStepTracker(title string) *StepTracker {
 			types.StatusSkipped: 4,
 		},
 		observers: make([]types.StepObserver, 0),
+		showProgress: true,
+		showTiming:   true,
+		compactMode:  false,
 	}
+	
+	for _, option := range options {
+		option(tracker)
+	}
+	
+	return tracker
 }
 
 // AddStep 添加步骤

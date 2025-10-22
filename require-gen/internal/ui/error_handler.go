@@ -105,7 +105,7 @@ func (eh *EnhancedErrorHandler) createErrorPanel(err error, context *ErrorContex
 	borderColor := getColorAttribute(context.Level)
 	return NewPanel(content.String(), "Error Details", 
 		WithBorderStyle(borderColor),
-		WithPadding(1, 2))
+		WithPanelPadding(1, 2))
 }
 
 // getLevelIcon 获取错误级别图标
@@ -269,7 +269,7 @@ func (eh *EnhancedErrorHandler) ShowRecoveryMessage(message string) {
 			eh.theme.Info().Sprint(message)),
 		"Recovery",
 		WithBorderStyle(color.FgGreen),
-		WithPadding(1, 2))
+		WithPanelPadding(1, 2))
 	panel.Render()
 }
 

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/fatih/color"
 	"specify-cli/internal/config"
 	"specify-cli/internal/infrastructure"
 	"specify-cli/internal/types"
@@ -34,7 +36,7 @@ import (
 //   - UIRenderer: 用户界面渲染和交互
 type InitHandler struct {
 	toolChecker      types.ToolChecker
-	gitOps          types.GitOperations
+	gitOps           types.GitOperations
 	templateProvider types.TemplateProvider
 	authProvider     types.AuthProvider
 	uiRenderer       types.UIRenderer
@@ -54,7 +56,8 @@ type InitHandler struct {
 //   - UIRenderer: 提供用户界面渲染和交互功能
 //
 // 返回值：
-//   *InitHandler - 完全配置的初始化处理器实例
+//
+//	*InitHandler - 完全配置的初始化处理器实例
 //
 // 设计模式：
 //   - 工厂模式：封装复杂的对象创建逻辑
@@ -62,12 +65,13 @@ type InitHandler struct {
 //   - 单一职责：每个组件专注于特定功能
 //
 // 使用示例：
-//   handler := business.NewInitHandler()
-//   err := handler.Execute(initOptions)
+//
+//	handler := business.NewInitHandler()
+//	err := handler.Execute(initOptions)
 func NewInitHandler() *InitHandler {
 	return &InitHandler{
 		toolChecker:      infrastructure.NewToolChecker(),
-		gitOps:          infrastructure.NewGitOperations(),
+		gitOps:           infrastructure.NewGitOperations(),
 		templateProvider: infrastructure.NewTemplateProvider(),
 		authProvider:     infrastructure.NewAuthProvider(),
 		uiRenderer:       ui.NewRenderer(),
@@ -90,24 +94,26 @@ func NewInitHandler() *InitHandler {
 //   - 完整的错误处理和用户反馈机制
 //
 // 执行流程：
-//   1. 创建步骤跟踪器并设置所有初始化步骤
-//   2. 显示初始化进度界面
-//   3. 按顺序执行9个核心步骤（验证、选择、检查、创建、下载、配置等）
-//   4. 在任何步骤失败时立即停止并显示错误信息
-//   5. 成功完成后显示完成状态和成功消息
+//  1. 创建步骤跟踪器并设置所有初始化步骤
+//  2. 显示初始化进度界面
+//  3. 按顺序执行9个核心步骤（验证、选择、检查、创建、下载、配置等）
+//  4. 在任何步骤失败时立即停止并显示错误信息
+//  5. 成功完成后显示完成状态和成功消息
 //
 // 参数：
-//   opts - 初始化选项配置，包含以下字段：
-//     - ProjectName: 项目名称（当Here为false时必需）
-//     - Here: 是否在当前目录初始化（默认false）
-//     - AIAssistant: AI助手类型（如"claude", "github-copilot"等）
-//     - ScriptType: 脚本类型（"sh"或"ps"）
-//     - GitHubToken: GitHub访问令牌（用于模板下载）
-//     - Verbose: 是否显示详细输出
-//     - Debug: 是否启用调试模式
+//
+//	opts - 初始化选项配置，包含以下字段：
+//	  - ProjectName: 项目名称（当Here为false时必需）
+//	  - Here: 是否在当前目录初始化（默认false）
+//	  - AIAssistant: AI助手类型（如"claude", "github-copilot"等）
+//	  - ScriptType: 脚本类型（"sh"或"ps"）
+//	  - GitHubToken: GitHub访问令牌（用于模板下载）
+//	  - Verbose: 是否显示详细输出
+//	  - Debug: 是否启用调试模式
 //
 // 返回值：
-//   error - 如果初始化过程中任何步骤失败，返回相应的错误信息；成功时返回nil
+//
+//	error - 如果初始化过程中任何步骤失败，返回相应的错误信息；成功时返回nil
 //
 // 错误处理：
 //   - 参数验证失败：返回参数相关错误
@@ -117,29 +123,30 @@ func NewInitHandler() *InitHandler {
 //   - Git操作失败：返回Git相关错误（非致命，会显示警告）
 //
 // 使用示例：
-//   handler := business.NewInitHandler()
-//   opts := types.InitOptions{
-//       ProjectName: "my-project",
-//       AIAssistant: "claude",
-//       ScriptType:  "sh",
-//       Verbose:     true,
-//   }
-//   err := handler.Execute(opts)
-//   if err != nil {
-//       log.Fatalf("项目初始化失败: %v", err)
-//   }
+//
+//	handler := business.NewInitHandler()
+//	opts := types.InitOptions{
+//	    ProjectName: "my-project",
+//	    AIAssistant: "claude",
+//	    ScriptType:  "sh",
+//	    Verbose:     true,
+//	}
+//	err := handler.Execute(opts)
+//	if err != nil {
+//	    log.Fatalf("项目初始化失败: %v", err)
+//	}
 func (h *InitHandler) Execute(opts types.InitOptions) error {
 	// 创建步骤跟踪器
 	tracker := ui.NewStepTracker("Project Initialization")
-	
+
 	// 添加步骤
 	h.setupSteps(tracker, opts)
-	
+
 	// 显示初始状态
 	tracker.Display()
 
 	// 执行初始化流程
-	if err := h.executeSteps(tracker, opts); err != nil {
+	if err := h.executeSteps(tracker, &opts); err != nil {
 		ui.ShowError(fmt.Sprintf("Initialization failed: %v", err))
 		return err
 	}
@@ -147,7 +154,10 @@ func (h *InitHandler) Execute(opts types.InitOptions) error {
 	// 显示完成状态
 	tracker.Display()
 	ui.ShowSuccess("Project initialization completed successfully!")
-	
+
+	// 显示后续命令指导
+	h.showNextStepsGuidance(&opts)
+
 	return nil
 }
 
@@ -157,19 +167,20 @@ func (h *InitHandler) Execute(opts types.InitOptions) error {
 // 进度可视化。每个步骤都有唯一的标识符和描述性名称。
 //
 // 初始化步骤序列：
-//   1. validate - 验证用户输入的选项参数
-//   2. select_ai - 选择或确认AI助手类型
-//   3. select_script - 选择或确认脚本类型（bash/PowerShell）
-//   4. check_tools - 检查系统中必需工具的可用性
-//   5. create_dir - 创建项目目录或确认当前目录
-//   6. download_template - 从GitHub下载项目模板
-//   7. init_git - 初始化Git仓库（如果不存在）
-//   8. configure - 配置项目设置和环境
-//   9. complete - 完成最终设置和清理工作
+//  1. validate - 验证用户输入的选项参数
+//  2. select_ai - 选择或确认AI助手类型
+//  3. select_script - 选择或确认脚本类型（bash/PowerShell）
+//  4. check_tools - 检查系统中必需工具的可用性
+//  5. create_dir - 创建项目目录或确认当前目录
+//  6. download_template - 从GitHub下载项目模板
+//  7. init_git - 初始化Git仓库（如果不存在）
+//  8. configure - 配置项目设置和环境
+//  9. complete - 完成最终设置和清理工作
 //
 // 参数：
-//   tracker - 步骤跟踪器实例，用于管理和显示进度
-//   opts - 初始化选项，虽然当前未直接使用，但为未来扩展预留
+//
+//	tracker - 步骤跟踪器实例，用于管理和显示进度
+//	opts - 初始化选项，虽然当前未直接使用，但为未来扩展预留
 //
 // 注意：
 //   - 步骤的执行顺序很重要，后续步骤可能依赖前面步骤的结果
@@ -200,70 +211,72 @@ func (h *InitHandler) setupSteps(tracker *ui.StepTracker, opts types.InitOptions
 //   - 支持某些步骤的跳过逻辑（如Git仓库已存在）
 //
 // 步骤执行流程：
-//   1. validateOptions - 验证和规范化用户输入
-//   2. selectAIAssistant - 交互式选择或确认AI助手
-//   3. selectScriptType - 交互式选择或确认脚本类型
-//   4. checkTools - 验证系统工具依赖
-//   5. createProjectDirectory - 创建或确认工作目录
-//   6. downloadTemplate - 下载和提取项目模板
-//   7. initializeGit - 初始化版本控制
-//   8. configureProject - 应用项目特定配置
-//   9. finalizeSetup - 完成最终设置和清理
+//  1. validateOptions - 验证和规范化用户输入
+//  2. selectAIAssistant - 交互式选择或确认AI助手
+//  3. selectScriptType - 交互式选择或确认脚本类型
+//  4. checkTools - 验证系统工具依赖
+//  5. createProjectDirectory - 创建或确认工作目录
+//  6. downloadTemplate - 下载和提取项目模板
+//  7. initializeGit - 初始化版本控制
+//  8. configureProject - 应用项目特定配置
+//  9. finalizeSetup - 完成最终设置和清理
 //
 // 参数：
-//   tracker - 步骤跟踪器，用于更新和显示进度状态
-//   opts - 初始化选项配置，包含所有必要的设置参数
+//
+//	tracker - 步骤跟踪器，用于更新和显示进度状态
+//	opts - 初始化选项配置，包含所有必要的设置参数
 //
 // 返回值：
-//   error - 如果任何步骤失败，返回详细的错误信息；成功时返回nil
+//
+//	error - 如果任何步骤失败，返回详细的错误信息；成功时返回nil
 //
 // 错误处理：
 //   - 每个步骤的错误都会被捕获并传播到上层
 //   - 错误信息包含失败步骤的上下文信息
 //   - 步骤跟踪器会显示失败状态和错误消息
-func (h *InitHandler) executeSteps(tracker *ui.StepTracker, opts types.InitOptions) error {
+func (h *InitHandler) executeSteps(tracker *ui.StepTracker, opts *types.InitOptions) error {
 	// 步骤1: 验证选项
-	if err := h.validateOptions(tracker, &opts); err != nil {
+	if err := h.validateOptions(tracker, opts); err != nil {
 		return err
 	}
 
 	// 步骤2: 选择AI助手
-	if err := h.selectAIAssistant(tracker, &opts); err != nil {
+	if err := h.selectAIAssistant(tracker, opts); err != nil {
 		return err
 	}
 
 	// 步骤3: 选择脚本类型
-	if err := h.selectScriptType(tracker, &opts); err != nil {
+	if err := h.selectScriptType(tracker, opts); err != nil {
 		return err
 	}
 
 	// 步骤4: 检查工具
-	if err := h.checkTools(tracker, opts); err != nil {
+	if err := h.checkTools(tracker, *opts); err != nil {
 		return err
 	}
 
 	// 步骤5: 创建项目目录
-	if err := h.createProjectDirectory(tracker, opts); err != nil {
+	if err := h.createProjectDirectory(tracker, *opts); err != nil {
 		return err
 	}
 
 	// 步骤6: 下载模板
-	if err := h.downloadTemplate(tracker, opts); err != nil {
+	if err := h.downloadTemplate(tracker, *opts); err != nil {
 		return err
 	}
 
 	// 步骤7: 初始化Git
-	if err := h.initializeGit(tracker, opts); err != nil {
+	if err := h.initializeGit(tracker, *opts); err != nil {
 		return err
 	}
 
 	// 步骤8: 配置项目
-	if err := h.configureProject(tracker, opts); err != nil {
+	if err := h.configureProject(tracker, *opts); err != nil {
 		return err
 	}
 
 	// 步骤9: 完成设置
-	if err := h.finalizeSetup(tracker, opts); err != nil {
+	if err := h.finalizeSetup(tracker, *opts); err != nil {
 		return err
 	}
 
@@ -292,11 +305,13 @@ func (h *InitHandler) executeSteps(tracker *ui.StepTracker, opts types.InitOptio
 //   - ps: Windows PowerShell脚本
 //
 // 参数：
-//   tracker - 步骤跟踪器，用于更新验证进度和状态
-//   opts - 指向初始化选项的指针，允许函数修改选项值
+//
+//	tracker - 步骤跟踪器，用于更新验证进度和状态
+//	opts - 指向初始化选项的指针，允许函数修改选项值
 //
 // 返回值：
-//   error - 如果验证失败，返回具体的错误信息；验证通过时返回nil
+//
+//	error - 如果验证失败，返回具体的错误信息；验证通过时返回nil
 //
 // 副作用：
 //   - 更新步骤跟踪器的状态（运行中、完成、错误）
@@ -353,18 +368,20 @@ func (h *InitHandler) validateOptions(tracker *ui.StepTracker, opts *types.InitO
 //   - 其他配置文件中定义的助手
 //
 // 选择流程：
-//   1. 检查用户是否已指定AI助手
-//   2. 如果未指定，从配置中获取所有可用助手
-//   3. 显示交互式选择界面
-//   4. 用户选择后更新选项配置
-//   5. 显示选择结果和助手信息
+//  1. 检查用户是否已指定AI助手
+//  2. 如果未指定，从配置中获取所有可用助手
+//  3. 显示交互式选择界面
+//  4. 用户选择后更新选项配置
+//  5. 显示选择结果和助手信息
 //
 // 参数：
-//   tracker - 步骤跟踪器，用于更新选择进度和状态
-//   opts - 指向初始化选项的指针，用于读取和更新AI助手设置
+//
+//	tracker - 步骤跟踪器，用于更新选择进度和状态
+//	opts - 指向初始化选项的指针，用于读取和更新AI助手设置
 //
 // 返回值：
-//   error - 如果选择过程失败，返回错误信息；成功时返回nil
+//
+//	error - 如果选择过程失败，返回错误信息；成功时返回nil
 //
 // 副作用：
 //   - 更新opts.AIAssistant字段为用户选择的助手
@@ -400,13 +417,13 @@ func (h *InitHandler) selectAIAssistant(tracker *ui.StepTracker, opts *types.Ini
 //
 // 支持的脚本类型：
 //   - sh (Shell): Unix/Linux/macOS的bash脚本
-//     * 适用于类Unix系统
-//     * 支持复杂的shell命令和管道操作
-//     * 广泛的工具链支持
+//   - 适用于类Unix系统
+//   - 支持复杂的shell命令和管道操作
+//   - 广泛的工具链支持
 //   - ps (PowerShell): Windows PowerShell脚本
-//     * 适用于Windows系统
-//     * 面向对象的命令行环境
-//     * 与.NET框架深度集成
+//   - 适用于Windows系统
+//   - 面向对象的命令行环境
+//   - 与.NET框架深度集成
 //
 // 自动检测逻辑：
 //   - 根据操作系统自动推荐默认脚本类型
@@ -420,11 +437,13 @@ func (h *InitHandler) selectAIAssistant(tracker *ui.StepTracker, opts *types.Ini
 //   - 智能默认选项基于当前操作系统
 //
 // 参数：
-//   tracker - 步骤跟踪器，用于更新选择进度和状态
-//   opts - 指向初始化选项的指针，用于读取和更新脚本类型设置
+//
+//	tracker - 步骤跟踪器，用于更新选择进度和状态
+//	opts - 指向初始化选项的指针，用于读取和更新脚本类型设置
 //
 // 返回值：
-//   error - 如果选择过程失败，返回错误信息；成功时返回nil
+//
+//	error - 如果选择过程失败，返回错误信息；成功时返回nil
 //
 // 副作用：
 //   - 更新opts.ScriptType字段为用户选择的脚本类型
@@ -485,11 +504,13 @@ func (h *InitHandler) selectScriptType(tracker *ui.StepTracker, opts *types.Init
 //   - 提供友好的错误消息和修复建议
 //
 // 参数：
-//   tracker - 步骤跟踪器，用于更新检查进度和状态
-//   opts - 初始化选项，包含AI助手类型等配置信息
+//
+//	tracker - 步骤跟踪器，用于更新检查进度和状态
+//	opts - 初始化选项，包含AI助手类型等配置信息
 //
 // 返回值：
-//   error - 如果任何必需工具缺失，返回详细的错误信息；所有工具可用时返回nil
+//
+//	error - 如果任何必需工具缺失，返回详细的错误信息；所有工具可用时返回nil
 //
 // 副作用：
 //   - 更新步骤跟踪器显示检查结果
@@ -510,13 +531,13 @@ func (h *InitHandler) checkTools(tracker *ui.StepTracker, opts types.InitOptions
 	tracker.SetStepRunning("check_tools", "Checking required tools")
 
 	tools := config.GetRequiredTools(opts.AIAssistant)
-	
+
 	// 创建一个types.StepTracker来传递给CheckAllTools
 	typesTracker := &types.StepTracker{
 		Title: "Tool Check",
 		Steps: make(map[string]*types.Step),
 	}
-	
+
 	if !h.toolChecker.CheckAllTools(tools, typesTracker) {
 		tracker.SetStepError("check_tools", "Some required tools are missing")
 		return fmt.Errorf("required tools are missing")
@@ -538,15 +559,15 @@ func (h *InitHandler) checkTools(tracker *ui.StepTracker, opts types.InitOptions
 //   - 支持嵌套目录结构的创建
 //
 // 目录操作流程：
-//   1. 检查用户的目录选择偏好（新建 vs 当前）
-//   2. 如果需要新建目录：
-//      - 使用项目名称创建目录
-//      - 设置适当的目录权限（0755）
-//      - 切换到新创建的目录
-//   3. 如果使用当前目录：
-//      - 验证当前目录的可写性
-//      - 获取并显示当前目录信息
-//   4. 更新步骤跟踪器显示目录信息
+//  1. 检查用户的目录选择偏好（新建 vs 当前）
+//  2. 如果需要新建目录：
+//     - 使用项目名称创建目录
+//     - 设置适当的目录权限（0755）
+//     - 切换到新创建的目录
+//  3. 如果使用当前目录：
+//     - 验证当前目录的可写性
+//     - 获取并显示当前目录信息
+//  4. 更新步骤跟踪器显示目录信息
 //
 // 权限设置：
 //   - 新创建的目录使用0755权限（rwxr-xr-x）
@@ -554,11 +575,13 @@ func (h *InitHandler) checkTools(tracker *ui.StepTracker, opts types.InitOptions
 //   - 确保组和其他用户可读执行
 //
 // 参数：
-//   tracker - 步骤跟踪器，用于更新目录创建进度和状态
-//   opts - 初始化选项，包含项目名称和目录选择设置
+//
+//	tracker - 步骤跟踪器，用于更新目录创建进度和状态
+//	opts - 初始化选项，包含项目名称和目录选择设置
 //
 // 返回值：
-//   error - 如果目录创建或切换失败，返回详细错误信息；成功时返回nil
+//
+//	error - 如果目录创建或切换失败，返回详细错误信息；成功时返回nil
 //
 // 副作用：
 //   - 可能在文件系统中创建新目录
@@ -610,7 +633,7 @@ func (h *InitHandler) createProjectDirectory(tracker *ui.StepTracker, opts types
 			} else {
 				ui.ShowWarning(fmt.Sprintf("Current directory is not empty (%d items)", len(entries)))
 				ui.ShowWarning("Template files will be merged with existing content and may overwrite existing files")
-				
+
 				// 在Go版本中，我们可以使用UI组件来询问用户确认
 				confirmed := h.uiRenderer.ConfirmAction("Do you want to continue?")
 				if !confirmed {
@@ -645,12 +668,12 @@ func (h *InitHandler) createProjectDirectory(tracker *ui.StepTracker, opts types
 //   - 通用模板：基础的Spec-Driven Development结构
 //
 // 下载流程：
-//   1. 构建下载选项配置
-//   2. 调用模板提供者的下载方法
-//   3. 验证下载的模板完整性
-//   4. 提取模板文件到项目目录
-//   5. 清理临时下载文件
-//   6. 更新步骤跟踪器显示结果
+//  1. 构建下载选项配置
+//  2. 调用模板提供者的下载方法
+//  3. 验证下载的模板完整性
+//  4. 提取模板文件到项目目录
+//  5. 清理临时下载文件
+//  6. 更新步骤跟踪器显示结果
 //
 // 网络优化：
 //   - 支持断点续传（如果模板提供者支持）
@@ -659,11 +682,13 @@ func (h *InitHandler) createProjectDirectory(tracker *ui.StepTracker, opts types
 //   - 并行下载多个文件（如果适用）
 //
 // 参数：
-//   tracker - 步骤跟踪器，用于更新下载进度和状态
-//   opts - 初始化选项，包含AI助手类型、GitHub令牌等配置
+//
+//	tracker - 步骤跟踪器，用于更新下载进度和状态
+//	opts - 初始化选项，包含AI助手类型、GitHub令牌等配置
 //
 // 返回值：
-//   error - 如果下载或提取失败，返回详细错误信息；成功时返回nil
+//
+//	error - 如果下载或提取失败，返回详细错误信息；成功时返回nil
 //
 // 副作用：
 //   - 在项目目录中创建模板文件和目录结构
@@ -687,7 +712,7 @@ func (h *InitHandler) downloadTemplate(tracker *ui.StepTracker, opts types.InitO
 		Verbose:      opts.Verbose,
 		ShowProgress: true,
 		GitHubToken:  opts.GitHubToken,
-		SkipTLS:      opts.SkipTLS,  // 传递SkipTLS标志到下载选项
+		SkipTLS:      opts.SkipTLS, // 传递SkipTLS标志到下载选项
 	}
 
 	templatePath, err := h.templateProvider.Download(downloadOpts)
@@ -713,11 +738,11 @@ func (h *InitHandler) downloadTemplate(tracker *ui.StepTracker, opts types.InitO
 //   - 处理各种Git初始化场景
 //
 // 初始化流程：
-//   1. 检查当前目录是否已经是Git仓库
-//   2. 如果已存在仓库，跳过初始化并显示状态
-//   3. 如果不存在仓库，调用Git初始化命令
-//   4. 验证初始化结果并更新状态
-//   5. 为后续的提交操作做准备
+//  1. 检查当前目录是否已经是Git仓库
+//  2. 如果已存在仓库，跳过初始化并显示状态
+//  3. 如果不存在仓库，调用Git初始化命令
+//  4. 验证初始化结果并更新状态
+//  5. 为后续的提交操作做准备
 //
 // Git配置：
 //   - 创建.git目录和基本结构
@@ -732,11 +757,13 @@ func (h *InitHandler) downloadTemplate(tracker *ui.StepTracker, opts types.InitO
 //   - 处理权限和路径问题
 //
 // 参数：
-//   tracker - 步骤跟踪器，用于更新Git初始化进度和状态
-//   opts - 初始化选项，包含详细输出控制等设置
+//
+//	tracker - 步骤跟踪器，用于更新Git初始化进度和状态
+//	opts - 初始化选项，包含详细输出控制等设置
 //
 // 返回值：
-//   error - 如果Git初始化失败，返回详细错误信息；成功或跳过时返回nil
+//
+//	error - 如果Git初始化失败，返回详细错误信息；成功或跳过时返回nil
 //
 // 副作用：
 //   - 可能在项目目录中创建.git目录和相关文件
@@ -818,11 +845,13 @@ func (h *InitHandler) initializeGit(tracker *ui.StepTracker, opts types.InitOpti
 //   - 文档配置: README模板、API文档设置
 //
 // 参数：
-//   tracker - 步骤跟踪器，用于更新配置进度和状态
-//   opts - 初始化选项，包含AI助手类型和其他配置参数
+//
+//	tracker - 步骤跟踪器，用于更新配置进度和状态
+//	opts - 初始化选项，包含AI助手类型和其他配置参数
 //
 // 返回值：
-//   error - 如果配置过程失败，返回详细错误信息；成功时返回nil
+//
+//	error - 如果配置过程失败，返回详细错误信息；成功时返回nil
 //
 // 副作用：
 //   - 创建或修改项目配置文件
@@ -886,11 +915,13 @@ func (h *InitHandler) configureProject(tracker *ui.StepTracker, opts types.InitO
 //   - 列出推荐的下一步操作
 //
 // 参数：
-//   tracker - 步骤跟踪器，用于更新最终化进度和状态
-//   opts - 初始化选项，包含项目配置和用户偏好
+//
+//	tracker - 步骤跟踪器，用于更新最终化进度和状态
+//	opts - 初始化选项，包含项目配置和用户偏好
 //
 // 返回值：
-//   error - 如果最终化过程失败，返回详细错误信息；成功时返回nil
+//
+//	error - 如果最终化过程失败，返回详细错误信息；成功时返回nil
 //
 // 副作用：
 //   - 创建Git提交（如果Git可用且仓库存在）
@@ -965,4 +996,147 @@ func (h *InitHandler) validateProjectConfig(config *types.ProjectConfig) error {
 	}
 
 	return nil
+}
+
+// showNextStepsGuidance 显示项目初始化完成后的后续步骤指导
+//
+// 该函数在项目初始化成功完成后调用，为用户提供清晰的下一步操作指导。
+// 它会根据项目配置和用户选择的AI助手，显示相关的命令和建议。
+//
+// 功能特性：
+//   - 显示项目目录导航命令
+//   - 提供AI助手使用指导
+//   - 展示常用的项目管理命令
+//   - 根据脚本类型显示相应的命令格式
+//   - 提供安全提示和最佳实践建议
+//
+// 显示内容：
+//  1. 项目导航命令（如果不是在当前目录初始化）
+//  2. AI助手配置和使用说明
+//  3. 常用的开发命令（如Git操作、脚本执行等）
+//  4. 安全注意事项（如.gitignore配置）
+//  5. 文档和帮助资源链接
+//
+// 参数：
+//
+//	opts - 初始化选项，包含项目名称、AI助手类型等配置信息
+//
+// 显示格式：
+//
+//	使用Panel组件展示结构化的指导信息，包含：
+//	- 彩色的命令示例
+//	- 清晰的步骤说明
+//	- 重要提示和警告
+//	- 相关资源链接
+func (h *InitHandler) showNextStepsGuidance(opts *types.InitOptions) {
+	fmt.Println()
+
+	// 首先显示项目设置说明
+	h.showProjectSettings(opts)
+
+	// 创建基础步骤指导
+	var stepLines []string
+	if opts.ProjectName != "." && !opts.Here {
+		stepLines = append(stepLines, fmt.Sprintf("1. Go to the project folder: %s", color.CyanString(fmt.Sprintf("cd %s", opts.ProjectName))))
+		stepLines = append(stepLines, "")
+		stepLines = append(stepLines, "2. Start using slash commands with your AI agent:")
+	} else {
+		stepLines = append(stepLines, "1. You're already in the project directory!")
+		stepLines = append(stepLines, "")
+		stepLines = append(stepLines, "2. Start using slash commands with your AI agent:")
+	}
+
+	stepLines = append(stepLines, "   2.1 "+color.CyanString("/constitution")+" - Establish project principles")
+	stepLines = append(stepLines, "   2.2 "+color.CyanString("/specify")+" - Create baseline specification")
+	stepLines = append(stepLines, "   2.3 "+color.CyanString("/plan")+" - Create implementation plan")
+	stepLines = append(stepLines, "   2.4 "+color.CyanString("/tasks")+" - Generate actionable tasks")
+	stepLines = append(stepLines, "   2.5 "+color.CyanString("/implement")+" - Execute implementation")
+
+	// 使用Panel组件显示基础步骤
+	stepsPanel := ui.NewPanel(
+		strings.Join(stepLines, "\n"),
+		"Next Steps",
+		ui.WithBorderStyle(color.FgCyan),
+		ui.WithPanelPadding(1, 2))
+	fmt.Print(stepsPanel.Render())
+	fmt.Println()
+
+	// 创建增强命令面板
+	enhancementLines := []string{
+		"Optional commands that you can use for your specs " + color.New(color.Faint).Sprint("(improve quality & confidence)"),
+		"",
+		"○ " + color.CyanString("/clarify") + " " + color.New(color.Faint).Sprint("(optional)") + " - Ask structured questions to de-risk ambiguous areas before planning (run before " + color.CyanString("/plan") + " if used)",
+		"○ " + color.CyanString("/analyze") + " " + color.New(color.Faint).Sprint("(optional)") + " - Cross-artifact consistency & alignment report (after " + color.CyanString("/tasks") + ", before " + color.CyanString("/implement") + ")",
+	}
+
+	// 使用Panel组件显示增强命令
+	enhancementPanel := ui.NewPanel(
+		strings.Join(enhancementLines, "\n"),
+		"Enhancement Commands",
+		ui.WithBorderStyle(color.FgCyan),
+		ui.WithPanelPadding(1, 2))
+	fmt.Print(enhancementPanel.Render())
+}
+
+// showProjectSettings 显示项目设置信息面板
+//
+// 该函数显示项目初始化完成后的配置信息，包括AI助手、脚本类型、
+// 项目名称等关键设置，以便用户确认和参考。
+//
+// 显示内容：
+// - 项目名称和路径
+// - 选择的AI助手类型
+// - 脚本类型配置
+// - Git仓库状态
+//
+// 参数：
+//   opts - 初始化选项，包含项目配置信息
+func (h *InitHandler) showProjectSettings(opts *types.InitOptions) {
+	// 获取AI助手信息
+	aiInfo, exists := config.GetAgentInfo(opts.AIAssistant)
+	if !exists {
+		// 如果找不到AI助手信息，使用默认值
+		aiInfo = types.AgentInfo{Name: opts.AIAssistant}
+	}
+	
+	// 获取脚本类型信息
+	scriptInfo, exists := config.GetScriptType(opts.ScriptType)
+	if !exists {
+		// 如果找不到脚本类型信息，使用默认值
+		scriptInfo = types.ScriptType{Description: opts.ScriptType}
+	}
+	
+	// 创建项目设置信息
+	settingsLines := []string{
+		fmt.Sprintf("%-15s %s", "Project Name:", color.CyanString(opts.ProjectName)),
+		fmt.Sprintf("%-15s %s", "AI Assistant:", color.GreenString(aiInfo.Name)),
+		fmt.Sprintf("%-15s %s", "Script Type:", color.YellowString(scriptInfo.Description)),
+		fmt.Sprintf("%-15s %s", "Location:", color.MagentaString(getProjectPath(*opts))),
+	}
+
+	// 创建项目设置面板
+	settingsContent := strings.Join(settingsLines, "\n")
+	settingsPanel := ui.NewPanel(settingsContent, "Project Settings")
+	fmt.Print(settingsPanel.Render())
+	fmt.Println()
+}
+
+// getProjectPath 获取项目路径显示字符串
+func getProjectPath(opts types.InitOptions) string {
+	if opts.Here {
+		return "Current directory"
+	}
+	return fmt.Sprintf("./%s", opts.ProjectName)
+}
+
+// getOSInfo 获取操作系统信息
+func getOSInfo() string {
+	switch {
+	case filepath.Separator == '\\':
+		return "Windows"
+	case filepath.Separator == '/':
+		return "Unix/Linux/macOS"
+	default:
+		return "Unknown"
+	}
 }

@@ -59,6 +59,24 @@ type ProgressBar struct {
 	showNumbers bool          // 显示数字
 	showSpeed   bool          // 显示速度
 	showETA     bool          // 显示预计完成时间
+	
+	// 多列支持
+	columns     []ProgressColumn
+	columnWidth int
+	
+	// 嵌套支持
+	children    []*ProgressBar
+	parent      *ProgressBar
+	level       int
+	indent      string
+}
+
+// ProgressColumn 进度条列定义
+type ProgressColumn struct {
+	Name        string
+	Width       int
+	Alignment   Alignment
+	Formatter   func(*ProgressBar) string
 }
 
 // ProgressBarOption 进度条配置选项
@@ -122,8 +140,8 @@ func NewProgressBar(total int64, description string, options ...ProgressBarOptio
 	return bar
 }
 
-// WithWidth 设置进度条宽度
-func WithWidth(width int) ProgressBarOption {
+// WithTableWidth 设置表格宽度
+func WithTableWidth(width int) ProgressBarOption {
 	return func(bar *ProgressBar) {
 		if width > 0 {
 			bar.width = width
@@ -159,6 +177,32 @@ func WithColors(fillColor, emptyColor color.Attribute) ProgressBarOption {
 func WithTextColor(textColor color.Attribute) ProgressBarOption {
 	return func(bar *ProgressBar) {
 		bar.textColor = color.New(textColor)
+	}
+}
+
+// WithColumns 设置进度条列
+func WithColumns(columns ...ProgressColumn) ProgressBarOption {
+	return func(pb *ProgressBar) {
+		pb.columns = columns
+	}
+}
+
+// WithColumnWidth 设置列宽度
+func WithColumnWidth(width int) ProgressBarOption {
+	return func(pb *ProgressBar) {
+		pb.columnWidth = width
+	}
+}
+
+// WithParent 设置父进度条（用于嵌套）
+func WithParent(parent *ProgressBar) ProgressBarOption {
+	return func(pb *ProgressBar) {
+		pb.parent = parent
+		if parent != nil {
+			pb.level = parent.level + 1
+			pb.indent = strings.Repeat("  ", pb.level)
+			parent.children = append(parent.children, pb)
+		}
 	}
 }
 
@@ -209,7 +253,32 @@ func (pb *ProgressBar) SetDescription(description string) {
 	pb.description = description
 }
 
-// GetProgress 获取当前进度百分比
+// GetDescription 获取进度条描述
+func (pb *ProgressBar) GetDescription() string {
+	return pb.description
+}
+
+// GetCurrent 获取当前进度
+func (pb *ProgressBar) GetCurrent() int64 {
+	return pb.current
+}
+
+// GetTotal 获取总进度
+func (pb *ProgressBar) GetTotal() int64 {
+	return pb.total
+}
+
+// GetSpeed 获取速度（简化实现）
+func (pb *ProgressBar) GetSpeed() float64 {
+	return 0.0 // 简化实现
+}
+
+// SetCurrent 设置当前进度
+func (pb *ProgressBar) SetCurrent(current int64) {
+	pb.Update(current)
+}
+
+// GetProgress 获取进度百分比
 func (pb *ProgressBar) GetProgress() float64 {
 	if pb.total == 0 {
 		return 0
@@ -222,11 +291,42 @@ func (pb *ProgressBar) IsCompleted() bool {
 	return pb.isCompleted
 }
 
-// render 渲染进度条
-func (pb *ProgressBar) render() {
-	// 清除当前行
-	fmt.Print("\r")
+// Render 渲染进度条
+func (pb *ProgressBar) Render() string {
+	// 如果有自定义列，使用列渲染
+	if len(pb.columns) > 0 {
+		return pb.renderWithColumns()
+	}
+
+	// 默认渲染
+	return pb.renderDefault()
+}
+
+// renderWithColumns 使用列渲染进度条
+func (pb *ProgressBar) renderWithColumns() string {
+	var parts []string
 	
+	for _, column := range pb.columns {
+		content := column.Formatter(pb)
+		if column.Width > 0 {
+			switch column.Alignment {
+			case AlignLeft:
+				content = Left(content, column.Width)
+			case AlignRight:
+				content = Right(content, column.Width)
+			case AlignCenter:
+				content = Center(content, column.Width)
+			}
+		}
+		parts = append(parts, content)
+	}
+	
+	result := pb.indent + strings.Join(parts, " ")
+	return result
+}
+
+// renderDefault 默认渲染方式
+func (pb *ProgressBar) renderDefault() string {
 	// 计算进度
 	progress := pb.GetProgress()
 	filledWidth := int(float64(pb.width) * progress / 100)
@@ -286,8 +386,17 @@ func (pb *ProgressBar) render() {
 		}
 	}
 	
+	result := pb.indent + bar.String()
+	return result
+}
+
+// render 渲染进度条（兼容性方法）
+func (pb *ProgressBar) render() {
+	// 清除当前行
+	fmt.Print("\r")
+	
 	// 输出进度条
-	fmt.Print(bar.String())
+	fmt.Print(pb.Render())
 	
 	// 如果完成，换行
 	if pb.isCompleted {

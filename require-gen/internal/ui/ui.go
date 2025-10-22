@@ -117,6 +117,110 @@ func (ui *UIManager) CreateProgressBar(total int64, description string, options 
 	return NewProgressBar(total, description, allOptions...)
 }
 
+// CreateTable 创建表格
+//
+// 使用当前主题的颜色创建一个新的表格实例。
+//
+// 参数：
+//   options - 可选的配置选项
+//
+// 返回值：
+//   *Table - 配置好的表格实例
+func (ui *UIManager) CreateTable(options ...TableOption) *Table {
+	// 基于当前主题创建表格
+	themeOptions := []TableOption{
+		WithHeaderColor(color.New(color.FgCyan, color.Bold)),
+		WithBorderColor(color.New(color.FgHiBlack)),
+		WithRowColors(color.New(color.FgWhite), color.New(color.FgHiBlack)),
+	}
+	
+	// 如果颜色被禁用，使用无颜色选项
+	if !ui.colorEnabled {
+		themeOptions = []TableOption{
+			WithHeaderColor(color.New()),
+			WithBorderColor(color.New()),
+			WithRowColors(color.New()),
+		}
+	}
+	
+	// 合并用户选项
+	allOptions := append(themeOptions, options...)
+	
+	return NewTable(allOptions...)
+}
+
+// CreateSpinner 创建加载动画
+//
+// 使用当前主题的颜色创建一个新的Spinner实例。
+//
+// 参数：
+//   style - 动画样式
+//   options - 可选的配置选项
+//
+// 返回值：
+//   *Spinner - 配置好的Spinner实例
+func (ui *UIManager) CreateSpinner(style SpinnerStyle, options ...SpinnerOption) *Spinner {
+	// 基于当前主题创建Spinner
+	themeOptions := []SpinnerOption{
+		WithSpinnerColor(color.New(color.FgCyan)),
+	}
+	
+	// 如果颜色被禁用，使用无颜色选项
+	if !ui.colorEnabled {
+		themeOptions = []SpinnerOption{
+			WithSpinnerColor(color.New()),
+		}
+	}
+	
+	// 合并用户选项
+	allOptions := append(themeOptions, options...)
+	
+	return NewSpinner(style, allOptions...)
+}
+
+// CreateLive 创建实时显示组件
+//
+// 创建一个新的Live实例用于实时内容更新。
+//
+// 参数：
+//   options - 可选的配置选项
+//
+// 返回值：
+//   *Live - 配置好的Live实例
+func (ui *UIManager) CreateLive(options ...LiveOption) *Live {
+	return NewLive(options...)
+}
+
+// CreatePanel 创建面板
+//
+// 使用当前主题的颜色创建一个新的Panel实例。
+//
+// 参数：
+//   content - 面板内容
+//   title - 面板标题
+//   options - 可选的配置选项
+//
+// 返回值：
+//   *Panel - 配置好的Panel实例
+func (ui *UIManager) CreatePanel(content, title string, options ...PanelOption) *Panel {
+	// 基于当前主题创建Panel
+	themeOptions := []PanelOption{
+		WithBorderStyle(color.FgCyan),
+	}
+	
+	// 如果颜色被禁用，使用无颜色选项
+	if !ui.colorEnabled {
+		themeOptions = []PanelOption{
+			WithBorderStyle(color.Reset),
+		}
+	}
+	
+	// 合并用户选项
+	allOptions := append(themeOptions, options...)
+	
+	return NewPanel(content, title, allOptions...)
+}
+
 // ShowBanner displays the application banner with enhanced styling
 func ShowBanner() {
 	// Use enhanced banner for better visual effect

@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"specify-cli/internal/config"
+	"specify-cli/internal/ui"
 )
 
 var (
@@ -18,14 +18,18 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "specify",
 	Short: "GitHub Spec Kit - Spec-Driven Development Toolkit",
-	Long: fmt.Sprintf(`%s
-
-%s
-
-A powerful toolkit for spec-driven development with AI assistants.
-Supports multiple AI platforms and script types for cross-platform development.`, 
-		config.Banner, config.Tagline),
+	Long: `A powerful toolkit for spec-driven development with AI assistants.
+Supports multiple AI platforms and script types for cross-platform development.`,
 	Version: "1.0.0",
+}
+
+// rootHelpFunc 自定义根命令的help函数，在显示help前先显示banner
+// 注意：这个函数现在已经不再使用，因为我们在init函数中直接设置了匿名函数
+func rootHelpFunc(cmd *cobra.Command, args []string) {
+	// 显示增强版banner
+	ui.ShowBanner()
+	// 调用默认的help函数
+	cmd.Root().Help()
 }
 
 // Execute 执行CLI命令
@@ -76,6 +80,18 @@ func Execute() error {
 
 // init 初始化CLI命令
 func init() {
+	// 设置自定义help函数，使用cobra的默认help模板
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		// 显示增强版banner
+		ui.ShowBanner()
+		// 使用cobra的默认help模板
+		tmpl := cmd.HelpTemplate()
+		if tmpl == "" {
+			tmpl = cmd.UsageTemplate()
+		}
+		cmd.Print(cmd.UsageString())
+	})
+	
 	// 添加全局标志
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug mode")
