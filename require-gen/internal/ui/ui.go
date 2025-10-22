@@ -7,7 +7,6 @@ import (
 	"github.com/eiannone/keyboard"
 	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
-	"specify-cli/internal/config"
 	"specify-cli/internal/types"
 )
 
@@ -118,42 +117,10 @@ func (ui *UIManager) CreateProgressBar(total int64, description string, options 
 	return NewProgressBar(total, description, allOptions...)
 }
 
-// ShowBanner 显示应用横幅
-//
-// ShowBanner 在终端中显示require-gen应用程序的欢迎横幅，
-// 包括应用名称、版本信息和标语。这是用户与应用交互的第一印象。
-//
-// 显示内容：
-// - 应用横幅：使用主题的主色调显示主标题
-// - 应用标语：使用主题的次要色调显示描述性文本
-// - 空行分隔：在横幅后添加空行以改善视觉效果
-//
-// 视觉特性：
-// - 主题感知：自动使用当前主题的颜色方案
-// - 跨平台兼容：在不同操作系统上保持一致显示
-// - 自适应终端：根据终端颜色支持自动调整
-//
-// 使用场景：
-// - 应用程序启动时的欢迎界面
-// - 命令行工具的品牌展示
-// - 用户体验的第一接触点
-//
-// 示例输出：
-//   ╔══════════════════════════════════════╗
-//   ║        REQUIRE-GEN FRAMEWORK         ║
-//   ╚══════════════════════════════════════╝
-//   🚀 智能项目初始化和AI助手集成工具
-//
-// 注意事项：
-// - 横幅内容来自config.Banner和config.Tagline
-// - 颜色输出依赖终端的颜色支持
-// - 函数为全局函数，使用全局主题设置
+// ShowBanner displays the application banner with enhanced styling
 func ShowBanner() {
-	theme := GetGlobalTheme()
-	
-	theme.Primary().Println(config.Banner)
-	theme.Secondary().Println(config.Tagline)
-	fmt.Println()
+	// Use enhanced banner for better visual effect
+	ShowBannerEnhanced()
 }
 
 // SelectWithArrows 使用箭头键选择选项
@@ -589,7 +556,7 @@ func NewRenderer() types.UIRenderer {
 
 // ShowBanner 实现UIRenderer接口
 func (r *Renderer) ShowBanner() {
-	ShowBanner()
+	ShowBannerEnhanced()
 }
 
 // SelectWithArrows 实现UIRenderer接口
