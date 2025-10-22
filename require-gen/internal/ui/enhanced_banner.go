@@ -28,9 +28,6 @@ func ShowBannerEnhanced() {
 	banner := config.Banner
 	tagline := config.Tagline
 	
-	// 获取终端宽度
-	width := getTerminalWidth()
-	
 	// 定义颜色序列（与Python版本保持一致）
 	colors := []color.Attribute{
 		color.FgHiBlue,   // bright_blue
@@ -49,23 +46,14 @@ func ShowBannerEnhanced() {
 		colorAttr := colors[i%len(colors)]
 		colorFunc := color.New(colorAttr, color.Bold)
 		
-		// 居中对齐
-		padding := (width - getDisplayWidth(line)) / 2
-		if padding > 0 {
-			fmt.Print(strings.Repeat(" ", padding))
-		}
-		
+		// 左对齐显示，不添加padding
 		colorFunc.Println(line)
 	}
 	
-	// 标语居中显示（斜体黄色）
+	// 标语左对齐显示（斜体黄色）
 	if tagline != "" {
 		// 注意：终端中的斜体支持有限，使用亮黄色代替
 		taglineColor := color.New(color.FgHiYellow, color.Bold)
-		taglinePadding := (width - getDisplayWidth(tagline)) / 2
-		if taglinePadding > 0 {
-			fmt.Print(strings.Repeat(" ", taglinePadding))
-		}
 		taglineColor.Println(tagline)
 	}
 	
