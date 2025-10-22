@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"specify-cli/internal/config"
 	"specify-cli/internal/infrastructure"
@@ -380,8 +379,8 @@ func (h *InitHandler) selectAIAssistant(tracker *ui.StepTracker, opts *types.Ini
 	tracker.SetStepRunning("select_ai", "Selecting AI assistant")
 
 	if opts.AIAssistant == "" {
-		agents := config.GetAllAgents()
-		selected, err := h.uiRenderer.SelectWithArrows(agents, "Select AI Assistant", "github-copilot")
+		agents := config.GetAllAgentsOrdered()
+		selected, err := h.uiRenderer.SelectWithArrowsOrdered(agents, "Select AI Assistant", "copilot")
 		if err != nil {
 			tracker.SetStepError("select_ai", fmt.Sprintf("Selection failed: %v", err))
 			return fmt.Errorf("failed to select AI assistant: %w", err)
@@ -572,13 +571,15 @@ func (h *InitHandler) checkTools(tracker *ui.StepTracker, opts types.InitOptions
 //   - 路径解析错误：无效的项目名称或路径字符
 //   - 文件系统错误：I/O错误、网络驱动器问题等
 func (h *InitHandler) createProjectDirectory(tracker *ui.StepTracker, opts types.InitOptions) error {
-	tracker.SetStepRunning("create_dir", "Creating project directory")
+	tracker.SetStepRunning("create_dir", "Setting up project directory")
 
-	if !opts.Here {
+	if !opts.Here && opts.ProjectName != "" {
 		// 检查目录是否已存在
 		if _, err := os.Stat(opts.ProjectName); err == nil {
-			tracker.SetStepError("create_dir", fmt.Sprintf("Directory '%s' already exists", opts.ProjectName))
-			return fmt.Errorf("directory '%s' already exists. Please choose a different project name or remove the existing directory", opts.ProjectName)
+			if !opts.Force {
+				tracker.SetStepError("create_dir", fmt.Sprintf("Directory '%s' already exists", opts.ProjectName))
+				return fmt.Errorf("directory '%s' already exists. Use --force to overwrite", opts.ProjectName)
+			}
 		}
 
 		if err := os.MkdirAll(opts.ProjectName, 0755); err != nil {
@@ -843,40 +844,8 @@ func (h *InitHandler) initializeGit(tracker *ui.StepTracker, opts types.InitOpti
 func (h *InitHandler) configureProject(tracker *ui.StepTracker, opts types.InitOptions) error {
 	tracker.SetStepRunning("configure", "Configuring project settings")
 
-	// 创建项目配置
-	config := &types.ProjectConfig{
-		ProjectName: opts.ProjectName,
-		Version:     "1.0.0",
-		Description: fmt.Sprintf("Project created with require-gen CLI for %s", opts.AIAssistant),
-		AIAssistant: opts.AIAssistant,
-		ScriptType:  opts.ScriptType,
-		GitEnabled:  !opts.NoGit,
-		Tools:       []string{}, // 可以根据AI助手类型填充
-		CustomSettings: map[string]interface{}{
-			"force_overwrite":    opts.Force,
-			"skip_tls_verify":    opts.SkipTLS,
-			"ignore_tool_check":  opts.IgnoreTools,
-			"verbose_output":     opts.Verbose,
-			"debug_mode":         opts.Debug,
-		},
-		CreatedAt: time.Now().Format(time.RFC3339),
-		UpdatedAt: time.Now().Format(time.RFC3339),
-	}
-
-	// 保存配置文件
-	configPath := filepath.Join(".", "require-gen.json")
-	if err := h.saveProjectConfig(config, configPath); err != nil {
-		tracker.SetStepError("configure", fmt.Sprintf("Failed to save config: %v", err))
-		return fmt.Errorf("failed to save project configuration: %w", err)
-	}
-
-	// 验证配置
-	if err := h.validateProjectConfig(config); err != nil {
-		tracker.SetStepError("configure", fmt.Sprintf("Config validation failed: %v", err))
-		return fmt.Errorf("project configuration validation failed: %w", err)
-	}
-
-	tracker.SetStepDone("configure", fmt.Sprintf("Project configured successfully (config: %s)", configPath))
+	// 跳过创建require-gen.json配置文件，保持与Python版本一致的轻量化设计
+	tracker.SetStepDone("configure", "Project configuration completed (lightweight setup)")
 	return nil
 }
 

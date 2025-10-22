@@ -170,12 +170,18 @@ func (t NetworkErrorType) String() string {
 //       Folder:      "copilot",
 //       InstallURL:  "https://github.com/features/copilot",
 //       RequiresCLI: true,
-//   }
+// AgentInfo 定义AI助手信息
 type AgentInfo struct {
 	Name        string `json:"name"`
 	Folder      string `json:"folder"`
 	InstallURL  string `json:"install_url,omitempty"`
 	RequiresCLI bool   `json:"requires_cli"`
+}
+
+// AgentOption 定义AI助手选项
+type AgentOption struct {
+	Key  string `json:"key"`
+	Name string `json:"name"`
 }
 
 // ScriptType 定义脚本类型配置
@@ -790,6 +796,7 @@ type ToolChecker interface {
 type UIRenderer interface {
 	ShowBanner()
 	SelectWithArrows(options map[string]string, prompt, defaultKey string) (string, error)
+	SelectWithArrowsOrdered(options []AgentOption, prompt, defaultKey string) (string, error)
 	GetKey() (string, error)
 	// ShowProgress 显示进度信息
 	ShowProgress(message string, percentage int)

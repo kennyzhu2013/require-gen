@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"specify-cli/internal/config"
+	"specify-cli/internal/ui"
 )
 
 // versionCmd version子命令
@@ -22,6 +23,29 @@ var configCmd = &cobra.Command{
 	Short: "Show configuration information",
 	Long:  "Display current configuration including available AI assistants and script types.",
 	Run:   runConfig,
+}
+
+// versionHelpFunc 自定义version命令的help函数，在显示help前先显示banner
+func versionHelpFunc(cmd *cobra.Command, args []string) {
+	// 显示banner
+	ui.ShowBanner()
+	// 调用默认的help函数
+	cmd.Parent().HelpFunc()(cmd, args)
+}
+
+// configHelpFunc 自定义config命令的help函数，在显示help前先显示banner
+func configHelpFunc(cmd *cobra.Command, args []string) {
+	// 显示banner
+	ui.ShowBanner()
+	// 调用默认的help函数
+	cmd.Parent().HelpFunc()(cmd, args)
+}
+
+// init 初始化version和config命令的自定义help函数
+func init() {
+	// 设置自定义help函数
+	versionCmd.SetHelpFunc(versionHelpFunc)
+	configCmd.SetHelpFunc(configHelpFunc)
 }
 
 // runVersion 执行version命令

@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"specify-cli/internal/business"
 	"specify-cli/internal/types"
+	"specify-cli/internal/ui"
 )
 
 var (
@@ -31,12 +32,21 @@ Examples:
 	RunE: runDownload,
 }
 
+// downloadHelpFunc 自定义download命令的help函数，在显示help前先显示banner
+func downloadHelpFunc(cmd *cobra.Command, args []string) {
+	// 显示banner
+	ui.ShowBanner()
+	// 调用默认的help函数
+	cmd.Parent().HelpFunc()(cmd, args)
+}
+
 func init() {
+	// 设置自定义help函数
+	downloadCmd.SetHelpFunc(downloadHelpFunc)
+	
 	// 添加download命令的标志
-	downloadCmd.Flags().StringVarP(&downloadDir, "dir", "d", ".", "Download directory")
-	downloadCmd.Flags().StringVarP(&scriptType, "script", "s", "", "Script type (sh/ps)")
-	downloadCmd.Flags().BoolVar(&showProgress, "progress", true, "Show download progress")
-	downloadCmd.Flags().StringVarP(&githubToken, "token", "t", "", "GitHub token for private repositories")
+	downloadCmd.Flags().StringVar(&downloadDir, "dir", "", "Directory to download templates to")
+	downloadCmd.Flags().BoolVar(&showProgress, "progress", false, "Show download progress")
 }
 
 // runDownload 执行download命令

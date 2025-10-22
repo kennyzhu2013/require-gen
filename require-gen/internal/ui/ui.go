@@ -224,6 +224,34 @@ func SelectWithArrows(options map[string]string, promptText, defaultKey string) 
 	return keys[index], nil
 }
 
+// SelectWithArrowsOrdered 使用有序列表进行选择
+func SelectWithArrowsOrdered(options []types.AgentOption, promptText, defaultKey string) (string, error) {
+	// 构建选项列表
+	var items []string
+	var keys []string
+	
+	for _, option := range options {
+		items = append(items, fmt.Sprintf("%s - %s", option.Key, option.Name))
+		keys = append(keys, option.Key)
+	}
+
+	// 创建选择提示
+	prompt := promptui.Select{
+		Label:     promptText,
+		Items:     items,
+		Size:      10,
+		Templates: getSelectTemplates(),
+	}
+
+	// 执行选择
+	index, _, err := prompt.Run()
+	if err != nil {
+		return "", fmt.Errorf("selection cancelled: %w", err)
+	}
+
+	return keys[index], nil
+}
+
 // 全局键盘状态管理
 var (
 	keyboardInitialized = false
@@ -567,6 +595,11 @@ func (r *Renderer) ShowBanner() {
 // SelectWithArrows 实现UIRenderer接口
 func (r *Renderer) SelectWithArrows(options map[string]string, prompt, defaultKey string) (string, error) {
 	return SelectWithArrows(options, prompt, defaultKey)
+}
+
+// SelectWithArrowsOrdered 使用有序列表进行选择
+func (r *Renderer) SelectWithArrowsOrdered(options []types.AgentOption, prompt, defaultKey string) (string, error) {
+	return SelectWithArrowsOrdered(options, prompt, defaultKey)
 }
 
 // GetKey 实现UIRenderer接口

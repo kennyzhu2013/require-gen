@@ -177,6 +177,27 @@ func GetAllAgents() map[string]string {
 	return agents
 }
 
+// GetAllAgentsOrdered 获取按定义顺序排列的AI助手列表
+func GetAllAgentsOrdered() []types.AgentOption {
+	// 按照AgentConfig中定义的顺序返回AI助手列表
+	// 确保与AgentConfig map中的定义顺序完全一致
+	orderedKeys := []string{
+		"copilot", "claude", "gemini", "cursor-agent", "qwen", "opencode",
+		"codex", "windsurf", "kilocode", "auggie", "codebuddy", "roo", "q",
+	}
+	
+	var agents []types.AgentOption
+	for _, key := range orderedKeys {
+		if info, exists := AgentConfig[key]; exists {
+			agents = append(agents, types.AgentOption{
+				Key:  key,
+				Name: info.Name,
+			})
+		}
+	}
+	return agents
+}
+
 // GetAllScriptTypes 获取所有脚本类型列表
 func GetAllScriptTypes() map[string]string {
 	scripts := make(map[string]string)

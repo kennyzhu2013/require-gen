@@ -37,9 +37,20 @@ Examples:
 	Run: runCheck,
 }
 
+// checkHelpFunc 自定义check命令的help函数，在显示help前先显示banner
+func checkHelpFunc(cmd *cobra.Command, args []string) {
+	// 显示banner
+	ui.ShowBanner()
+	// 调用默认的help函数
+	cmd.Parent().HelpFunc()(cmd, args)
+}
+
 func init() {
+	// 设置自定义help函数
+	checkCmd.SetHelpFunc(checkHelpFunc)
+	
 	// 添加check命令的标志
-	checkCmd.Flags().BoolVar(&showVersions, "versions", false, "Show versions of available tools")
+	checkCmd.Flags().BoolVar(&showVersions, "versions", false, "Show tool versions")
 	checkCmd.Flags().BoolVar(&showDetails, "details", false, "Show detailed system information")
 }
 

@@ -52,7 +52,18 @@ Examples:
 	RunE: runInit,
 }
 
+// initHelpFunc 自定义init命令的help函数，在显示help前先显示banner
+func initHelpFunc(cmd *cobra.Command, args []string) {
+	// 显示banner
+	ui.ShowBanner()
+	// 调用默认的help函数
+	cmd.Parent().HelpFunc()(cmd, args)
+}
+
 func init() {
+	// 设置自定义help函数
+	initCmd.SetHelpFunc(initHelpFunc)
+	
 	// 添加init命令的标志
 	initCmd.Flags().StringVarP(&projectName, "name", "n", "", "Project name (overrides positional argument)")
 	initCmd.Flags().BoolVar(&here, "here", false, "Initialize in current directory")
@@ -74,9 +85,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		projectName = args[0]
 	}
 
-	// 验证参数
+	// 如果没有指定项目名称且没有使用--here，则默认在当前目录初始化
 	if !here && projectName == "" {
-		return fmt.Errorf("project name is required unless --here is used")
+		here = true
 	}
 
 	// 构建初始化选项
@@ -122,18 +133,14 @@ func validateInitOptions(opts *types.InitOptions) error {
 	}
 
 	// 验证项目目录
-	if !opts.Here {
-		if opts.ProjectName == "" {
-			return fmt.Errorf("project name is required")
-		}
-
+	if !opts.Here && opts.ProjectName != "" {
 		// 检查目录是否已存在
 		if _, err := os.Stat(opts.ProjectName); err == nil {
 			if !opts.Force {
 				return fmt.Errorf("directory '%s' already exists. Use --force to overwrite", opts.ProjectName)
 			}
 		}
-	} else {
+	} else if opts.Here {
 		// 检查当前目录是否为空
 		cwd, err := os.Getwd()
 		if err != nil {

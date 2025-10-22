@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
-	"specify-cli/internal/config"
 	"specify-cli/internal/types"
 	"specify-cli/internal/ui"
 )
@@ -198,14 +197,8 @@ func (tp *TemplateProvider) Download(opts types.DownloadOptions) (string, error)
 		tp.client.SetTLSClientConfig(tlsConfig)
 	}
 
-	// 获取AI助手信息
-	agentInfo, exists := config.GetAgentInfo(opts.AIAssistant)
-	if !exists {
-		return "", fmt.Errorf("unknown AI assistant: %s", opts.AIAssistant)
-	}
-
-	// 构建目标路径
-	targetDir := filepath.Join(opts.DownloadDir, agentInfo.Folder)
+	// 构建目标目录路径 - 直接使用DownloadDir作为目标目录
+	targetDir := opts.DownloadDir
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create target directory: %w", err)
 	}
@@ -216,7 +209,7 @@ func (tp *TemplateProvider) Download(opts types.DownloadOptions) (string, error)
 		return "", fmt.Errorf("failed to get latest release: %w", err)
 	}
 
-	// 查找合适的资源
+	// 查找匹配的资产
 	asset, err := tp.findAsset(release, opts.AIAssistant, opts.ScriptType)
 	if err != nil {
 		return "", fmt.Errorf("failed to find suitable asset: %w", err)
@@ -457,11 +450,11 @@ func (tp *TemplateProvider) extractZip(zipPath, targetDir string, opts types.Dow
 	// 创建ZIP处理器
 	zipProcessor := NewZipProcessor(sysOps)
 
-	// 配置提取选项
+	// 配置提取选项 - 禁用扁平化结构以保持正确的目录层级
 	extractOpts := &ExtractOptions{
 		OverwriteExisting:   true,
 		PreservePermissions: true,
-		FlattenStructure:    false,
+		FlattenStructure:    false,  // 禁用扁平化结构，保持原有目录结构
 		MaxFileSize:         100 * 1024 * 1024, // 100MB
 		AllowedExtensions:   []string{},        // 允许所有扩展名
 		SkipHidden:          false,
@@ -469,6 +462,7 @@ func (tp *TemplateProvider) extractZip(zipPath, targetDir string, opts types.Dow
 	}
 
 	// 执行ZIP提取
+	var err error
 	if opts.Verbose {
 		// 使用带进度的提取
 		progressCallback := func(current, total int64) {
@@ -479,20 +473,88 @@ func (tp *TemplateProvider) extractZip(zipPath, targetDir string, opts types.Dow
 			}
 		}
 
-		err := zipProcessor.ExtractWithProgress(zipPath, targetDir, extractOpts, progressCallback)
-		if err != nil {
-			return fmt.Errorf("failed to extract ZIP file: %w", err)
-		}
+		err = zipProcessor.ExtractWithProgress(zipPath, targetDir, extractOpts, progressCallback)
 	} else {
 		// 使用普通提取
-		err := zipProcessor.ExtractZip(zipPath, targetDir, extractOpts)
-		if err != nil {
-			return fmt.Errorf("failed to extract ZIP file: %w", err)
+		err = zipProcessor.ExtractZip(zipPath, targetDir, extractOpts)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to extract ZIP file: %w", err)
+	}
+
+	// 检查并处理嵌套目录结构（模仿Python版本的扁平化逻辑）
+	if err := tp.handleNestedDirectories(targetDir, opts); err != nil {
+		if opts.Verbose {
+			ui.ShowWarning(fmt.Sprintf("Failed to flatten nested directories: %v", err))
 		}
+		// 不将扁平化失败作为致命错误，继续执行
+	}
+
+	// 提取完成后删除zip文件
+	if err := os.Remove(zipPath); err != nil {
+		if opts.Verbose {
+			ui.ShowWarning(fmt.Sprintf("Failed to remove zip file %s: %v", zipPath, err))
+		}
+		// 不将删除失败作为致命错误，继续执行
+	} else if opts.Verbose {
+		ui.ShowInfo(fmt.Sprintf("Removed temporary zip file: %s", filepath.Base(zipPath)))
 	}
 
 	if opts.Verbose {
 		ui.ShowSuccess("Extraction completed")
+	}
+
+	return nil
+}
+
+// handleNestedDirectories 处理嵌套目录结构，模仿Python版本的扁平化逻辑
+func (tp *TemplateProvider) handleNestedDirectories(targetDir string, opts types.DownloadOptions) error {
+	// 列出目标目录中的所有项目
+	entries, err := os.ReadDir(targetDir)
+	if err != nil {
+		return fmt.Errorf("failed to read target directory: %w", err)
+	}
+
+	// 如果只有一个顶级目录，检查是否需要扁平化
+	if len(entries) == 1 && entries[0].IsDir() {
+		nestedDir := filepath.Join(targetDir, entries[0].Name())
+		
+		if opts.Verbose {
+			ui.ShowInfo(fmt.Sprintf("Found nested directory structure: %s", entries[0].Name()))
+		}
+
+		// 读取嵌套目录中的所有内容
+		nestedEntries, err := os.ReadDir(nestedDir)
+		if err != nil {
+			return fmt.Errorf("failed to read nested directory: %w", err)
+		}
+
+		// 将嵌套目录中的所有内容移动到父目录
+		for _, entry := range nestedEntries {
+			srcPath := filepath.Join(nestedDir, entry.Name())
+			destPath := filepath.Join(targetDir, entry.Name())
+			
+			if opts.Verbose {
+				ui.ShowInfo(fmt.Sprintf("Moving %s to parent directory", entry.Name()))
+			}
+			
+			if err := os.Rename(srcPath, destPath); err != nil {
+				return fmt.Errorf("failed to move %s: %w", entry.Name(), err)
+			}
+		}
+
+		// 删除现在为空的嵌套目录
+		if err := os.Remove(nestedDir); err != nil {
+			if opts.Verbose {
+				ui.ShowWarning(fmt.Sprintf("Failed to remove empty nested directory: %v", err))
+			}
+			// 不将删除失败作为致命错误
+		}
+
+		if opts.Verbose {
+			ui.ShowInfo("Flattened nested directory structure")
+		}
 	}
 
 	return nil
